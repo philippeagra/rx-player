@@ -130,11 +130,14 @@ function request<T>(
       }
     }
 
+    const wantedTimeout = options.timeout == null ?
+      DEFAULT_REQUEST_TIMEOUT : options.timeout;
+
     // let timeouted = false;
-    const timeout = window.setTimeout(() => {
+    const timeout = wantedTimeout == null ? null : window.setTimeout(() => {
       // timeouted = true;
       abortController.abort();
-    }, options.timeout == null ? options.timeout : DEFAULT_REQUEST_TIMEOUT);
+    }, wantedTimeout);
 
     const sendingTime = performance.now();
     fetch(options.url, {
@@ -161,6 +164,8 @@ function request<T>(
         }
       })().then(responseData => {
         const receivedTime = performance.now();
+
+        // XXX TODO Manage progress events
         obs.next({
           type: "response",
           value: {
@@ -171,7 +176,7 @@ function request<T>(
             receivedTime,
             duration: receivedTime - sendingTime,
             size: responseData instanceof ArrayBuffer ?
-            responseData.byteLength : 0,
+              responseData.byteLength : 0,
             responseData,
           },
         });
