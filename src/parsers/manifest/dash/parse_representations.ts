@@ -180,6 +180,14 @@ export default function parseRepresentations(
       parsedRepresentation.frameRate =
         adaptation.attributes.frameRate;
     }
+    if (representation.attributes.sampleRate != null) {
+      parsedRepresentation.sampleRate =
+        representation.attributes.sampleRate;
+    }
+    if (representation.attributes.channels != null) {
+      parsedRepresentation.channels =
+        representation.attributes.channels;
+    }
     if (representation.attributes.height != null) {
       parsedRepresentation.height =
         representation.attributes.height;

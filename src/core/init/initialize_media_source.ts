@@ -45,6 +45,7 @@ import throttle from "../../utils/rx-throttle";
 import ABRManager, {
   IABRMetric,
   IABRRequest,
+  IPlaybackQualityRequirements,
 } from "../abr";
 import { IKeySystemOption } from "../eme";
 import {
@@ -102,6 +103,7 @@ export interface IInitializeOptions {
     maxAutoBitrates : Partial<Record<IBufferType, number>>;
     throttle : Partial<Record<IBufferType, Observable<number>>>;
     limitWidth : Partial<Record<IBufferType, Observable<number>>>;
+    playbackQualityRequirements? : IPlaybackQualityRequirements;
   };
   autoPlay : boolean;
   bufferOptions : {

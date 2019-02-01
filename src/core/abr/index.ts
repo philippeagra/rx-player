@@ -18,11 +18,13 @@ import ABRManager, {
   IABRClockTick,
   IABRMetric,
   IABRRequest,
+  IPlaybackQualityRequirements,
 } from "./abr_manager";
 export { IABREstimation } from "./representation_chooser";
 
 export default ABRManager;
 export {
+  IPlaybackQualityRequirements,
   IABRMetric,
   IABRRequest,
   IABRClockTick,

@@ -681,6 +681,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
       transport,
       transportOptions,
       url,
+      playbackQualityRequirements,
     } = options;
 
     // Perform multiple checks on the given options
@@ -749,6 +750,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
           video: videoWidth$(videoElement)
             .pipe(takeUntil(this._priv_stopCurrentContent$)),
         } : {},
+        playbackQualityRequirements,
       };
 
       // Options used by the TextTrack SourceBuffer

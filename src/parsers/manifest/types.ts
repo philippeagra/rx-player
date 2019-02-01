@@ -28,9 +28,11 @@ export interface IParsedRepresentation {
   id: string;
 
   // optional
+  channels?: number;
   codecs?: string;
   contentProtections? : IContentProtection[];
   frameRate?: string;
+  sampleRate?: number;
   height?: number;
   mimeType?: string;
   width?: number;
