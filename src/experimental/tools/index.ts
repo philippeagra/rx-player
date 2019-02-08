@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+import ImageLoader from "./imageLoader";
 import mediaCapabilitiesProber from "./mediaCapabilitiesProber";
 
 export {
-  mediaCapabilitiesProber
+  mediaCapabilitiesProber,
+  ImageLoader
 };
