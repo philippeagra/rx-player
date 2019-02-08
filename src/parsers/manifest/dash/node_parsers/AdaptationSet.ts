@@ -53,6 +53,7 @@ export interface IAdaptationSetChildren {
   representations : IRepresentationIntermediateRepresentation[];
 
   // optional
+  isTrickmodeFor? : string;
   accessibility? : IScheme;
   contentComponent? : IParsedContentComponent;
   contentProtections? : IParsedContentProtection[];
@@ -133,6 +134,13 @@ function parseAdaptationSetChildren(
           } else {
             children.roles.push(parseScheme(currentElement));
           }
+          break;
+
+        case "EssentialProperty":
+          const { schemeIdUri, value } = parseScheme(currentElement);
+          children.isTrickmodeFor =
+            (schemeIdUri === "http://dashif.org/guidelines/trickmode" && value != null) ?
+              value : undefined;
           break;
 
         case "SupplementalProperty":
