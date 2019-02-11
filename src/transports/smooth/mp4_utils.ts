@@ -546,18 +546,14 @@ const atoms = {
   /**
    * @param {Number} algId - eg 1
    * @param {Number} ivSize - eg 8
-   * @param {string} keyId - Hex KID 93789920e8d6520098577df8f2dd5546
+   * @param {Uint8Array} keyId
    * @returns {Uint8Array}
    */
-  tenc(algId : number, ivSize : number, keyId : string) : Uint8Array {
+  tenc(algId : number, ivSize : number, keyId : Uint8Array) : Uint8Array {
     if (__DEV__) {
       assert(keyId.length === 32, "wrong default KID length");
     }
-    return createAtom("tenc", concat(
-      6,
-      [algId, ivSize],
-      hexToBytes(keyId)
-    ));
+    return createAtom("tenc", concat(6, [algId, ivSize], keyId));
   },
 
   /**
@@ -846,8 +842,7 @@ export default {
    * @param {Number} vRes
    * @param {Number} nalLength (1, 2 or 4)
    * @param {string} codecPrivateData
-   * @param {string} keyId - hex string representing the key Id,
-   * 32 chars. eg. a800dbed49c12c4cb8e0b25643844b9b
+   * @param {Uint8Array} keyId
    * @param {Array.<Object>} [pssList] - List of dict, example:
    * {systemId: "DEADBEEF", codecPrivateData: "DEAFBEEF}
    * @returns {Uint8Array}
@@ -860,7 +855,7 @@ export default {
     vRes : number,
     nalLength : number,
     codecPrivateData : string,
-    keyId? : string,
+    keyId? : Uint8Array,
     pssList? : IPSSList
   ) : Uint8Array {
     const _pssList = pssList || [];
@@ -919,7 +914,7 @@ export default {
    * @param {Number} packetSize
    * @param {Number} sampleRate
    * @param {string} codecPrivateData
-   * @param {string} keyId - hex string representing the key Id, 32 chars.
+   * @param {Uint8Array} keyId
    * eg. a800dbed49c12c4cb8e0b25643844b9b
    * @param {Array.<Object>} [pssList] - List of dict, example:
    * {systemId: "DEADBEEF", codecPrivateData: "DEAFBEEF"}
@@ -932,7 +927,7 @@ export default {
     packetSize : number,
     sampleRate : number,
     codecPrivateData : string,
-    keyId? : string,
+    keyId? : Uint8Array,
     pssList? : IPSSList
   ) {
     const _pssList = pssList || [];

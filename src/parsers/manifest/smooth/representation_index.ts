@@ -263,7 +263,7 @@ interface ISmoothInitSegmentPrivateInfos {
   packetSize? : number;
   samplingRate? : number;
   protection? : {
-    keyId : string;
+    keyId : Uint8Array;
     keySystems: Array<{
       systemId : string;
       privateData : Uint8Array;
@@ -295,7 +295,7 @@ export default class SmoothRepresentationIndex
     //   - else, the time of creation of this RepresentationIndex, as the best guess
     private _indexValidityTime : number;
     private _protection? : {
-      keyId : string;
+      keyId : Uint8Array;
       keySystems: Array<{
         systemId : string;
         privateData : Uint8Array;
