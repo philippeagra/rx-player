@@ -17,22 +17,26 @@
 import {
   combineLatest as observableCombineLatest,
   Observable,
+  Observer,
   of as observableOf,
+  Subject,
 } from "rxjs";
 import {
   catchError,
-  exhaustMap,
+  distinctUntilChanged,
   map,
   mapTo,
   mergeMap,
   shareReplay,
+  take,
+  takeUntil,
   tap,
 } from "rxjs/operators";
 import openMediaSource from "../../../core/init/create_media_source";
 import QueuedSourceBuffer from "../../../core/source_buffers/queued_source_buffer";
 import arrayFind from "../../../utils/array_find";
-import castToObservable from "../../../utils/cast_to_observable";
-import PPromise from "../../../utils/promise";
+import arrayFindIndex from "../../../utils/array_find_index";
+import concatMapLatest from "../../../utils/concat_map_latest";
 
 interface IThumbnail {
   start: number;
@@ -46,104 +50,147 @@ interface IThumbnailTrack {
   codec: string;
 }
 
-function loadThumbnail(mediaURL: string): Promise<ArrayBuffer> {
-  return new PPromise((resolve, reject) => {
+/**
+ * Fetch data from URL
+ * @param {string} url
+ * @returns {Observable<ArrayBuffer>}
+ */
+function loadArrayBufferData(url: string): Observable<ArrayBuffer> {
+  return new Observable((obs: Observer<ArrayBuffer>) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("GET", mediaURL, true);
+    xhr.open("GET", url, true);
     xhr.responseType = "arraybuffer";
     xhr.onload = (evt: any) => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(evt.target.response);
+        obs.next(evt.target.response);
         return;
       }
-      reject();
+      obs.error(new Error("ImageLoader: Couldn't load data."));
     };
     xhr.send();
   });
 }
 
+/**
+ *
+ */
 export default class ImageLoader {
   private readonly _videoElement : HTMLVideoElement;
-  private readonly _readyVideoElement$ : Observable<{
-    videoSourceBuffer: QueuedSourceBuffer<any>;
-    mediaSource: MediaSource;
-  }>;
+  private readonly _ringBufferDepth: number;
   private  _initSegment: ArrayBuffer|null;
   private _thumbnailTrack : IThumbnailTrack|null;
-  private _buffered: Array<[number, number]>;
+  private _buffered: Array<[number, number, ArrayBuffer]>;
+
+  private _setTime$: Subject<number>;
+  private _dispose$: Subject<number>;
+  private _mediaSourceInfos$: Observable<any>;
 
   constructor(
     videoElement: HTMLVideoElement,
-    thumbnailTrack: IThumbnailTrack
+    thumbnailTrack: IThumbnailTrack,
+    ringBufferLength: number
   ) {
+    this._ringBufferDepth = ringBufferLength;
     this._buffered = [];
     this._videoElement = videoElement;
     this._thumbnailTrack = thumbnailTrack;
     this._initSegment = null;
 
-    this._readyVideoElement$ = openMediaSource(this._videoElement).pipe(
-      mergeMap((mediaSource) => {
-        const sourceBuffer =
-          mediaSource.addSourceBuffer(thumbnailTrack.codec); // XXX TODO adapt codec
-        const videoSourceBuffer =
-          new QueuedSourceBuffer("video", "video/mp4", sourceBuffer);
+    this._setTime$ = new Subject();
+    this._dispose$ = new Subject();
+    this._setTime$.next();
 
+    /**
+     *
+     * @param {HTMLVideoElement} elt
+     */
+    function prepareSourceBuffer(
+      elt: HTMLVideoElement
+    ): Observable<{
+      mediaSource: MediaSource;
+      videoSourceBuffer: QueuedSourceBuffer<any>;
+    }> {
+      return openMediaSource(elt).pipe(
+        map((mediaSource) => {
+          const sourceBuffer = mediaSource.addSourceBuffer(thumbnailTrack.codec);
+          return {
+            mediaSource,
+            videoSourceBuffer:
+              new QueuedSourceBuffer("video", thumbnailTrack.codec, sourceBuffer),
+          };
+        })
+      );
+    }
+
+    /**
+     *
+     * @param {string} url
+     * @param {string} codec
+     * @param {Object} videoSourceBuffer
+     */
+    function appendInitSegment(
+      url: string,
+      codec: string,
+      videoSourceBuffer: QueuedSourceBuffer<any>
+    ): Observable<ArrayBuffer> {
+      return loadArrayBufferData(url).pipe(
+        mergeMap((e) => {
+          return videoSourceBuffer.appendBuffer({
+            initSegment : e,
+            segment: null,
+            codec,
+            timestampOffset: 0,
+          }).pipe(mapTo(e));
+        })
+      );
+    }
+
+    this._mediaSourceInfos$ = prepareSourceBuffer(this._videoElement).pipe(
+      mergeMap(({ videoSourceBuffer }) => {
         if (!this._thumbnailTrack) {
-          throw new Error();
+          throw new Error("ImageLoader: No thumbnail track provided.");
         }
-
-        return castToObservable(loadThumbnail(thumbnailTrack.init))
-          .pipe(
-            mergeMap((e) => {
-              this._initSegment = e;
-              return videoSourceBuffer.appendBuffer({
-                initSegment : e,
-                segment: null,
-                codec: "",
-                timestampOffset: 0,
-              }) as Observable<any>;
-            }),
-            mapTo(({ videoSourceBuffer, mediaSource }))
+        const { init, codec } = thumbnailTrack;
+        return appendInitSegment(init, codec, videoSourceBuffer).pipe(
+          tap((initSegment) => this._initSegment = initSegment),
+          mapTo((videoSourceBuffer))
         );
       }),
-      shareReplay({ refCount : true })
+      catchError(() => {
+        throw new Error("ImageLoaderError: Couldn't open media source.");
+      }),
+      shareReplay({ refCount: true })
     );
 
-  }
+    observableCombineLatest(
+      this._setTime$.pipe(distinctUntilChanged()),
+      this._mediaSourceInfos$
+    ).pipe(
+      concatMapLatest(([time, videoSourceBuffer]) => {
+        const bufferToRemove: Array<[number, number, ArrayBuffer]> = [];
+        while (this._buffered.length > this._ringBufferDepth) {
+          const newBuffer = this._buffered.shift();
+          if (newBuffer) {
+            bufferToRemove.push(newBuffer);
+          }
+        }
 
-  updateThumbnailTrack(newTrack: IThumbnailTrack): Promise<IThumbnailTrack|null> {
-    return this._readyVideoElement$.pipe(
-      catchError(() => {
-        throw new Error("ImageLoaderError: Couldn't open media source.");
-      }),
-      tap(() => this._thumbnailTrack = newTrack),
-      map(() => this._thumbnailTrack)
-    ).toPromise(PPromise);
-    // XXX TODO : Check if currently set image is correct ?
-  }
-
-  setTime(time: number): Promise<number> {
-    return this._readyVideoElement$.pipe(
-      catchError(() => {
-        throw new Error("ImageLoaderError: Couldn't open media source.");
-      }),
-      mergeMap(({ videoSourceBuffer }) => {
         const removeBuffer$: Observable<null> =
-          this._buffered.length <= 0 ? observableOf(null) :
+          bufferToRemove.length <= 0 ? observableOf(null) :
             observableCombineLatest(...
-              this._buffered.map(([start, end]) => {
+              bufferToRemove.map(([start, end]) => {
                 return videoSourceBuffer.removeBuffer(start, end).pipe(
-                );
-              })
-            ).pipe(mapTo(null));
+              );
+            })
+          ).pipe(mapTo(null));
+
         return removeBuffer$.pipe(
           catchError((_) => {
             throw new Error("ImageLoaderError: Couldn't remove buffer.");
           }),
-          exhaustMap(() => {
-            this._buffered = [];
+          mergeMap(() => {
             if (!this._thumbnailTrack) {
-              throw new Error("ImageLoader");
+              throw new Error("ImageLoader: No thumbnail track given.");
             }
 
             const thumbnail: IThumbnail|undefined =
@@ -155,38 +202,73 @@ export default class ImageLoader {
               throw new Error("ImageLoaderError: Couldn't find thumbnail.");
             }
 
-            return castToObservable(loadThumbnail(thumbnail.mediaURL)).pipe(
-              catchError((_) => {
-                throw new Error("ImageLoaderError: Couldn't load thumbnail.");
-              }),
-              mergeMap((data) => {
-                return videoSourceBuffer
-                  .appendBuffer({
-                    segment: data,
-                    initSegment: this._initSegment,
-                    codec: "null",
-                    timestampOffset: 0,
-                  }).pipe(
-                    catchError((_) => {
-                      throw new Error(
-                        "ImageLoaderError: Couldn't load append buffer.");
-                    }),
-                    map(() => {
-                      this._buffered
-                        .push([thumbnail.start, thumbnail.start + thumbnail.duration]);
-                      this._videoElement.currentTime = time;
-                      return time;
-                    })
-                  );
-              })
-            );
-          })
-        );
-      })
-    ).toPromise(PPromise);
+          const bufferIdx = arrayFindIndex(this._buffered, ([start, end]) => {
+            return start <= time && end > time;
+          });
+
+          return (bufferIdx === -1 ? loadArrayBufferData(thumbnail.mediaURL).pipe(
+            catchError((_) => {
+              throw new Error("ImageLoaderError: Couldn't load thumbnail.");
+            })) : observableOf(this._buffered[bufferIdx][2])).pipe(
+            mergeMap((data) => {
+              return videoSourceBuffer
+                .appendBuffer({
+                  segment: data,
+                  initSegment: this._initSegment,
+                  codec: "null",
+                  timestampOffset: 0,
+                }).pipe(
+                  catchError((_) => {
+                    throw new Error(
+                      "ImageLoaderError: Couldn't append buffer.");
+                  }),
+                  map(() => {
+                    this._buffered.push([
+                      thumbnail.start,
+                      thumbnail.start + thumbnail.duration,
+                      data,
+                    ]);
+                    this._videoElement.currentTime = time;
+                    return time;
+                  })
+                );
+            })
+          );
+        }),
+        take(1)
+      );
+    }),
+    catchError((err) => {
+      throw err;
+    }),
+    takeUntil(this._dispose$)
+    ).subscribe();
   }
 
+  /**
+   *
+   * @param {Object} newTrack
+   */
+  updateThumbnailTrack(newTrack: IThumbnailTrack): void {
+    this._thumbnailTrack = newTrack;
+  }
+
+  /**
+   *
+   * @param {number} time
+   */
+  setTime(time: number): void {
+    this._setTime$.next(time);
+  }
+
+  /**
+   *
+   */
   dispose() {
+    this._initSegment = null;
     this._thumbnailTrack = null;
+    this._buffered = [];
+    this._dispose$.next();
+    this._setTime$.complete();
   }
 }
