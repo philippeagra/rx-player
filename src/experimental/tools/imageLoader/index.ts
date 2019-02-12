@@ -30,13 +30,14 @@ import {
   shareReplay,
   take,
   takeUntil,
-  tap,
 } from "rxjs/operators";
 import openMediaSource from "../../../core/init/create_media_source";
 import QueuedSourceBuffer from "../../../core/source_buffers/queued_source_buffer";
 import arrayFind from "../../../utils/array_find";
 import arrayFindIndex from "../../../utils/array_find_index";
 import concatMapLatest from "../../../utils/concat_map_latest";
+
+import { ITrickModeTrack } from "../../../manifest/adaptation";
 
 interface IThumbnail {
   start: number;
@@ -62,8 +63,11 @@ function loadArrayBufferData(url: string): Observable<ArrayBuffer> {
     xhr.responseType = "arraybuffer";
     xhr.onload = (evt: any) => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        obs.next(evt.target.response);
-        return;
+        const { response } = evt.target;
+        if (response instanceof ArrayBuffer) {
+          obs.next(response);
+          return;
+        }
       }
       obs.error(new Error("ImageLoader: Couldn't load data."));
     };
@@ -87,25 +91,58 @@ export default class ImageLoader {
 
   constructor(
     videoElement: HTMLVideoElement,
-    thumbnailTrack: IThumbnailTrack,
+    trickModeTrack: ITrickModeTrack,
     ringBufferLength: number
   ) {
     this._ringBufferDepth = ringBufferLength;
     this._buffered = [];
     this._videoElement = videoElement;
-    this._thumbnailTrack = thumbnailTrack;
+    this._thumbnailTrack = null;
+
+    if (trickModeTrack.representations.length === 0) {
+      throw new Error("ImageLoader: No qualities in trick mode track.");
+    }
+
+    const trackIndex = trickModeTrack.representations[0].index;
+
+    const idxStart = trackIndex.getFirstPosition();
+    const idxEnd = trackIndex.getLastPosition();
+    if (idxStart != null && idxEnd != null) {
+      const segments = trackIndex.getSegments(idxStart, idxEnd - idxStart);
+      const currentTrack = segments
+        .filter((s) => s.duration != null && s.mediaURL != null)
+        .map((s) => {
+          return {
+            duration: (s.duration || 0) / 10000000,
+            start: s.time / 10000000,
+            mediaURL: s.mediaURL || "",
+          };
+        });
+      const initSegment =
+        trickModeTrack.representations[0].index.getInitSegment();
+      this._thumbnailTrack = {
+        thumbnails: currentTrack,
+        codec: trickModeTrack.representations[0].getMimeTypeString(),
+        init: initSegment ? (initSegment.mediaURL || "") : "",
+      };
+    } else {
+      throw new Error("ImageLoader: Can't get segments from trick mode track.");
+    }
+
     this._initSegment = null;
 
     this._setTime$ = new Subject();
-    this._dispose$ = new Subject();
     this._setTime$.next();
+
+    this._dispose$ = new Subject();
 
     /**
      *
      * @param {HTMLVideoElement} elt
      */
     function prepareSourceBuffer(
-      elt: HTMLVideoElement
+      elt: HTMLVideoElement,
+      thumbnailTrack: IThumbnailTrack
     ): Observable<{
       mediaSource: MediaSource;
       videoSourceBuffer: QueuedSourceBuffer<any>;
@@ -145,22 +182,29 @@ export default class ImageLoader {
       );
     }
 
-    this._mediaSourceInfos$ = prepareSourceBuffer(this._videoElement).pipe(
-      mergeMap(({ videoSourceBuffer }) => {
-        if (!this._thumbnailTrack) {
-          throw new Error("ImageLoader: No thumbnail track provided.");
-        }
-        const { init, codec } = thumbnailTrack;
-        return appendInitSegment(init, codec, videoSourceBuffer).pipe(
-          tap((initSegment) => this._initSegment = initSegment),
-          mapTo((videoSourceBuffer))
-        );
-      }),
-      catchError(() => {
-        throw new Error("ImageLoaderError: Couldn't open media source.");
-      }),
-      shareReplay({ refCount: true })
-    );
+    if (this._thumbnailTrack == null) {
+      throw new Error("ImageLoader: No built thumbnail track.");
+    }
+
+    this._mediaSourceInfos$ =
+      prepareSourceBuffer(this._videoElement, this._thumbnailTrack).pipe(
+        mergeMap(({ videoSourceBuffer }) => {
+          if (!this._thumbnailTrack) {
+            throw new Error("ImageLoader: No thumbnail track provided.");
+          }
+          const { init, codec } = this._thumbnailTrack;
+          return appendInitSegment(init, codec, videoSourceBuffer).pipe(
+            map((initSegment) => {
+              this._initSegment = initSegment;
+              return videoSourceBuffer;
+            })
+          );
+        }),
+        catchError(() => {
+          throw new Error("ImageLoaderError: Couldn't open media source.");
+        }),
+        shareReplay({ refCount: true })
+      );
 
     observableCombineLatest(
       this._setTime$.pipe(distinctUntilChanged()),
@@ -202,46 +246,50 @@ export default class ImageLoader {
               throw new Error("ImageLoaderError: Couldn't find thumbnail.");
             }
 
-          const bufferIdx = arrayFindIndex(this._buffered, ([start, end]) => {
-            return start <= time && end > time;
-          });
+            const bufferIdx = arrayFindIndex(this._buffered, ([start, end]) => {
+              return start <= time && end > time;
+            });
 
-          return (bufferIdx === -1 ? loadArrayBufferData(thumbnail.mediaURL).pipe(
-            catchError((_) => {
-              throw new Error("ImageLoaderError: Couldn't load thumbnail.");
-            })) : observableOf(this._buffered[bufferIdx][2])).pipe(
-            mergeMap((data) => {
-              return videoSourceBuffer
-                .appendBuffer({
-                  segment: data,
-                  initSegment: this._initSegment,
-                  codec: "null",
-                  timestampOffset: 0,
-                }).pipe(
-                  catchError((_) => {
-                    throw new Error(
-                      "ImageLoaderError: Couldn't append buffer.");
-                  }),
-                  map(() => {
-                    this._buffered.push([
-                      thumbnail.start,
-                      thumbnail.start + thumbnail.duration,
-                      data,
-                    ]);
-                    this._videoElement.currentTime = time;
-                    return time;
-                  })
-                );
-            })
-          );
-        }),
-        take(1)
-      );
-    }),
-    catchError((err) => {
-      throw err;
-    }),
-    takeUntil(this._dispose$)
+            return (bufferIdx === -1 ?
+              loadArrayBufferData(thumbnail.mediaURL).pipe(
+                catchError((_) => {
+                  throw new Error("ImageLoaderError: Couldn't load thumbnail.");
+                })
+              ) :
+              observableOf(this._buffered[bufferIdx][2])
+            ).pipe(
+              mergeMap((data) => {
+                return videoSourceBuffer
+                  .appendBuffer({
+                    segment: data,
+                    initSegment: this._initSegment,
+                    codec: "null",
+                    timestampOffset: 0,
+                  }).pipe(
+                    catchError((_) => {
+                      throw new Error(
+                        "ImageLoaderError: Couldn't append buffer.");
+                    }),
+                    map(() => {
+                      this._buffered.push([
+                        thumbnail.start,
+                        thumbnail.start + thumbnail.duration,
+                        data,
+                      ]);
+                      this._videoElement.currentTime = time;
+                      return time;
+                    })
+                  );
+              })
+            );
+          }),
+          take(1)
+        );
+      }),
+      catchError((err) => {
+        throw err;
+      }),
+      takeUntil(this._dispose$)
     ).subscribe();
   }
 

@@ -65,7 +65,7 @@ export interface IAdaptationArguments {
   manuallyAdded? : boolean;
 }
 
-interface ITrickModeTrack {
+export interface ITrickModeTrack {
   id: string;
   representations: Representation[];
 }
