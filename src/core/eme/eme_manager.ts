@@ -25,7 +25,6 @@ import {
 } from "rxjs";
 import {
   catchError,
-  filter,
   ignoreElements,
   map,
   mapTo,
@@ -44,13 +43,16 @@ import { assertInterface } from "../../utils/assert";
 import noop from "../../utils/noop";
 import disposeMediaKeys from "./dispose_media_keys";
 import getSession from "./get_session";
-import handleSessionEvents from "./handle_session_events";
+import handleSessionEvents, {
+  ILicenseUpdatedEvent,
+} from "./handle_session_events";
 import initMediaKeys from "./init_media_keys";
 import MediaKeysInfosStore from "./media_keys_infos_store";
 import setServerCertificate from "./set_server_certificate";
 import {
   IEMEInitEvent,
   IEMEWarningEvent,
+  IKeyStatusChangeEvent,
   IKeySystemOption,
 } from "./types";
 import InitDataStore from "./utils/init_data_store";
@@ -83,7 +85,9 @@ function clearEMESession(mediaElement : HTMLMediaElement) : Observable<never> {
 // TODO More events
 export type IEMEManagerEvent =
   IEMEWarningEvent |
-  IEMEInitEvent;
+  IEMEInitEvent |
+  ILicenseUpdatedEvent |
+  IKeyStatusChangeEvent;
 
 /**
  * EME abstraction and event handler used to communicate with the Content-
@@ -188,11 +192,8 @@ export default function EMEManager(
             }),
             ignoreElements()
           ) : EMPTY
-      ).pipe(filter((sessionEvent) : sessionEvent is IEMEWarningEvent =>
-        sessionEvent.type === "warning"
-      ));
-    })
-  );
+      );
+    }));
   return observableMerge(initEvent$, startEME$);
 }
 

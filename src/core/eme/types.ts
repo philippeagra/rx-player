@@ -34,6 +34,14 @@ export interface IEMEInitEvent {
   type: "eme-init";
 }
 
+export interface IKeyStatusChangeEvent {
+  type : "key-status-change";
+  value: {
+    keyStatus: MediaKeyStatus;
+    keyId : ArrayBuffer;
+  };
+}
+
 // Infos indentifying a MediaKeySystemAccess
 export interface IKeySystemAccessInfos {
   keySystemAccess: ICompatMediaKeySystemAccess|ICustomMediaKeySystemAccess;
@@ -89,17 +97,5 @@ export interface IKeySystemOption {
   videoRobustnesses?: Array<string|undefined>;
   audioRobustnesses?: Array<string|undefined>;
   throwOnLicenseExpiration? : boolean;
+  throwOnInternalError? : boolean;
 }
-
-// Keys are the different key statuses possible.
-// Values are ``true`` if such key status defines an error
-/* tslint:disable no-object-literal-type-assertion */
-export const KEY_STATUS_ERRORS = {
-  "internal-error": true,
-  expired: false,
-  released: false,
-  "output-restricted": false,
-  "output-downscaled": false,
-  "status-pending": false,
-} as Partial<Record<string, boolean>>;
-/* tslint:enable no-object-literal-type-assertion */
