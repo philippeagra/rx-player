@@ -35,10 +35,12 @@ export interface IEMEInitEvent {
 }
 
 export interface IKeyStatusChangeEvent {
-  type : "key-status-change";
+  type : "key-statuses-change";
   value: {
-    keyStatus: MediaKeyStatus;
-    keyId : ArrayBuffer;
+    statuses: Array<{
+      keyStatus: MediaKeyStatus;
+      keyId : ArrayBuffer;
+    }>;
   };
 }
 

@@ -154,7 +154,8 @@ export default function handleSessionEvents(
     .pipe(mergeMap((keyStatusesEvent: Event) => {
       log.debug("EME: keystatuseschange event", session, keyStatusesEvent);
 
-      const warnings : Array<IEMEWarningEvent|IKeyStatusChangeEvent> = [];
+      const warnings : IEMEWarningEvent[] = [];
+      const statuses : Array<{ keyStatus: MediaKeyStatus; keyId : ArrayBuffer}> = [];
       (session.keyStatuses as any).forEach((_arg1 : unknown, _arg2 : unknown) => {
         const [keyStatus, keyId] = (() => {
           return (typeof _arg1  === "string" ?
@@ -185,14 +186,15 @@ export default function handleSessionEvents(
             warnings.push({ type: "warning", value: error });
           } // /!\ Do not break here
           case KEY_STATUSES.OUTPUT_RESTRICTED:
-            warnings.push({
-              type: "key-status-change" as "key-status-change",
-              value: { keyId, keyStatus },
-            });
+            statuses.push({ keyId, keyStatus });
         }
       });
 
       const warnings$ = warnings.length ? observableOf(...warnings) : EMPTY;
+      const statusesChange$ = statuses.length ? observableOf({
+        type: "key-statuses-change" as "key-statuses-change",
+        value: { statuses },
+      }) : EMPTY;
       const handledKeyStatusesChange$ = tryCatch(() => {
         return keySystem && keySystem.onKeyStatusesChange ?
           castToObservable(
@@ -212,7 +214,7 @@ export default function handleSessionEvents(
             },
           }))
         );
-      return observableConcat(warnings$, handledKeyStatusesChange$);
+      return observableConcat(warnings$, statusesChange$, handledKeyStatusesChange$);
     }));
 
   const keyMessages$ : Observable<ILicenseUpdateEvent> =
