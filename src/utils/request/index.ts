@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-import xhrRequest, {
+import {
   IRequestOptions,
   IRequestProgress,
   IRequestResponse,
 } from "./xhr_request";
 
-export default xhrRequest;
+import fetchRequest from "./fetch";
+
+export default fetchRequest;
 export {
   IRequestOptions,
   IRequestProgress,

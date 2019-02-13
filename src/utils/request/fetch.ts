@@ -47,6 +47,7 @@ export interface IRequestResponse<T, U> {
     size : number;
     status : number;
     url : string;
+    partial? : boolean;
   };
 }
 
@@ -140,17 +141,61 @@ function request<T>(
     }, wantedTimeout);
 
     const sendingTime = performance.now();
-    fetch(options.url, {
-      headers,
-      method: "GET",
-      signal: abortController.signal,
-    }).then((response) => {
+
+    function handleArrayBuffer(response: Response) {
       if (timeout != null) {
         clearTimeout(timeout);
       }
 
-      const responseType = !options.responseType || options.responseType === "document" ?
-        "text" : options.responseType;
+      if (response && response.body) {
+        const reader = response.body.getReader();
+
+        function readChunk() {
+          return reader.read().then(handleChunk);
+        }
+
+        function handleChunk(chunk: any) {
+        // XXX TODO Manage progress events
+          const receivedTime = performance.now();
+
+          const responseData = chunk.value;
+          obs.next({
+            type: "response",
+            value: {
+              responseType: "arraybuffer",
+              status: response.status,
+              url: response.url,
+              sendingTime,
+              receivedTime,
+              duration: receivedTime - sendingTime,
+              size: responseData instanceof ArrayBuffer ?
+                responseData.byteLength : 0,
+              responseData,
+              partial: !chunk.done,
+            },
+          });
+
+          if (chunk.done) {
+            obs.complete();
+          } else {
+            return readChunk();
+          }
+        }
+
+        return readChunk();
+      }
+      return undefined;
+    }
+
+    function handleOtherThanArrayBuffer(
+      response: Response,
+      responseType: string
+    ) {
+
+      if (timeout != null) {
+        clearTimeout(timeout);
+      }
+
       return (() => {
         switch (responseType) {
           case "arraybuffer":
@@ -161,6 +206,8 @@ function request<T>(
             return response.blob();
           case "text":
             return response.text();
+          default:
+            throw new Error("");
         }
       })().then(responseData => {
         const receivedTime = performance.now();
@@ -182,12 +229,20 @@ function request<T>(
         });
         obs.complete();
       });
-    // }).catch((e) => {
-    //   if (timeouted) {
-    //     const errorCode = RequestErrorTypes.TIMEOUT;
-    //     obs.error(new RequestError(xhr /* TODO */, url, errorCode));
-    //     return;
-    //   }
+    }
+
+    /* tslint:disable */
+    fetch(options.url, {
+      headers,
+      method: "GET",
+      signal: abortController.signal,
+    }).then((response) => {
+      const responseType = !options.responseType || options.responseType === "document" ?
+        "text" : options.responseType;
+      if (responseType === "arraybuffer") {
+        return handleArrayBuffer(response);
+      }
+      return handleOtherThanArrayBuffer(response, responseType);
     });
 
       return () => {

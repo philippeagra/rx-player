@@ -289,6 +289,7 @@ export default function createLoader<T, U>(
                       arg.value.sendingTime : undefined,
                     receivedTime: arg.type === "response" ?
                       arg.value.receivedTime : undefined,
+                    partial: arg.value.partial,
                   }),
                 });
                 const metrics$ = arg.type !== "response" ?

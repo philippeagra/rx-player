@@ -80,6 +80,7 @@ export interface ILoaderResponseValue<T> {
                          // origin), in ms
   receivedTime? : number; // time at which the request was received (since the
                           // time origin), in ms
+  partial?: boolean;
 }
 
 // A loader gave a response after a request
