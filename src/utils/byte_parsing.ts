@@ -351,6 +351,20 @@ function guidToUuid(uuid : string) : string {
   return bytesToHex(ord);
 }
 
+function isABEqualBytes(buffer : ArrayBuffer, bytes : Uint8Array) {
+  const view = new DataView(buffer);
+  const len = view.byteLength;
+  if (len !== bytes.length) {
+    return false;
+  }
+  for (let i = 0; i < len; i++) {
+    if (view.getUint8(i) !== bytes[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export {
   strToBytes,
   bytesToStr, bytesToUTF16Str,
@@ -362,4 +376,5 @@ export {
   itobe2, itobe4, itobe8,
   itole2, itole4,
   guidToUuid,
+  isABEqualBytes,
 };

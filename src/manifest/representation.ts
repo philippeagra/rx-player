@@ -144,6 +144,11 @@ class Representation {
     }
 
     this.index = args.index;
+
+    // XXX TODO
+    if (this.bitrate === 770663) {
+      this.contentProtections = [{ keyId: new Uint8Array([0, 1, 2]) }];
+    }
   }
 
   /**

@@ -17,6 +17,7 @@
 import { ICustomError } from "../errors";
 import log from "../log";
 import arrayFind from "../utils/array_find";
+import { isABEqualBytes } from "../utils/byte_parsing";
 import EventEmitter from "../utils/event_emitter";
 import idGenerator from "../utils/id_generator";
 import warnOnce from "../utils/warn_once";
@@ -27,6 +28,7 @@ import Adaptation, {
 import Period, {
   IPeriodArguments,
 } from "./period";
+import Representation from "./representation";
 import { StaticRepresentationIndex } from "./representation_index";
 import updatePeriodInPlace from "./update_period";
 
@@ -75,10 +77,28 @@ interface IManifestParsingOptions {
 
 export interface IManifestEvents {
   manifestUpdate : null;
+  blacklistUpdate : Array<{ // new blacklisted elements:
+    period : Period;
+    adaptation : Adaptation;
+    representation : Representation;
+  }>;
 }
 
 /**
  * Normalized Manifest structure.
+ * Details the current content being played:
+ *   - the duration of the content
+ *   - the available tracks
+ *   - the available qualities
+ *   - the segments defined in those qualities
+ *   - ...
+ * while staying agnostic of the transport protocol used (Smooth or DASH).
+ *
+ * The Manifest and its contained informations can evolve over time (like when
+ * updating a live manifest of when right management forbid some tracks from
+ * being played).
+ * To perform actions on those changes, any module using this Manifest can
+ * listen to its sent events and react accordingly.
  * @class Manifest
  */
 export default class Manifest extends EventEmitter<IManifestEvents> {
@@ -455,13 +475,56 @@ export default class Manifest extends EventEmitter<IManifestEvents> {
   }
 
   /**
+   * Look in the Manifest for Representations linked to the given key ID,
+   * and mark them as being impossible to decrypt.
+   * Then trigger a "blacklist-update" event to notify everyone of the changes
+   * performed.
+   * @param {Array.<ArrayBuffer>} keyIDs
+   */
+  public blacklistKeyIDs(keyIDs : ArrayBuffer[]) : void {
+    // TODO Doing a Map<keyID hash, Representation[]> first might be more efficient
+    const updates : Array<{
+      period : Period;
+      adaptation : Adaptation;
+      representation : Representation;
+    }> = [];
+    for (let i = 0; i < this.periods.length; i++) {
+      const period = this.periods[i];
+      const adaptations = period.getAdaptations();
+      for (let j = 0; j < adaptations.length; j++) {
+        const adaptation = adaptations[j];
+        const representations = adaptation.representations;
+        for (let k = 0; k < representations.length; k++) {
+          const representation = representations[k];
+          const { contentProtections } = representation;
+          if (contentProtections != null) {
+            for (let l = 0; l < contentProtections.length; l++) {
+              const contentProtection = contentProtections[l];
+              for (let m = 0; m < keyIDs.length; m++) {
+                if (isABEqualBytes(keyIDs[m], contentProtection.keyId)) {
+                  updates.push({ period, adaptation, representation });
+                  representation.decryptable = false;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (updates.length) {
+      this.trigger("blacklistUpdate", updates);
+    }
+  }
+
+  /**
    * Add supplementary image Adaptation(s) to the manifest.
    * @private
    * @param {Object|Array.<Object>} imageTracks
    */
   private addSupplementaryImageAdaptations(
     imageTracks : ISupplementaryImageTrack|ISupplementaryImageTrack[]
-  ) {
+  ) : void {
     const _imageTracks = Array.isArray(imageTracks) ? imageTracks : [imageTracks];
     const newImageTracks = _imageTracks.map(({ mimeType, url }) => {
       const adaptationID = "gen-image-ada-" + generateNewId();
@@ -495,7 +558,7 @@ export default class Manifest extends EventEmitter<IManifestEvents> {
    */
   private addSupplementaryTextAdaptations(
     textTracks : ISupplementaryTextTrack|ISupplementaryTextTrack[]
-  ) {
+  ) : void {
     const _textTracks = Array.isArray(textTracks) ? textTracks : [textTracks];
     const newTextAdaptations = _textTracks.reduce((allSubs : Adaptation[], {
       mimeType,
