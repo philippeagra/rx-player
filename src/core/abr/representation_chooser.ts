@@ -386,15 +386,13 @@ export default class RepresentationChooser {
     clock$ : Observable<IRepresentationChooserClockTick>,
     representations : Representation[]
   ) : Observable<IABREstimation> {
-    const decryptableRepresentations = representations
-      .filter(representation => representation.decryptable !== false);
-    if (!decryptableRepresentations.length) {
+    if (!representations.length) {
       throw new Error("ABRManager: no representation choice given");
     }
-    if (decryptableRepresentations.length === 1) {
+    if (representations.length === 1) {
       return observableOf({
         bitrate: undefined, // Bitrate estimation is deactivated here
-        representation: decryptableRepresentations[0],
+        representation: representations[0],
         manual: false,
         urgent: true,
       });
@@ -431,8 +429,8 @@ export default class RepresentationChooser {
         // -- MANUAL mode --
         return observableOf({
           bitrate: undefined, // Bitrate estimation is deactivated here
-          representation: fromBitrateCeil(decryptableRepresentations, manualBitrate) ||
-            decryptableRepresentations[0],
+          representation: fromBitrateCeil(representations, manualBitrate) ||
+            representations[0],
           manual: true,
           urgent: true, // a manual bitrate switch should happen immediately
         });
@@ -506,11 +504,10 @@ export default class RepresentationChooser {
           }
 
           const _representations =
-            getFilteredRepresentations(decryptableRepresentations, deviceEvents);
+            getFilteredRepresentations(representations, deviceEvents);
 
           const chosenRepresentation =
-            fromBitrateCeil(_representations, newBitrateCeil) ||
-            decryptableRepresentations[0];
+            fromBitrateCeil(_representations, newBitrateCeil) || representations[0];
 
           const urgent = (() => {
             if (clock.downloadBitrate == null) {

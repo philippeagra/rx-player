@@ -123,8 +123,10 @@ export default function AdaptationBuffer<T>(
     return objectAssign({ downloadBitrate }, tick);
   }));
 
+  const decryptableRepresentations = adaptation.representations
+    .filter((representation) => representation.decryptable !== false);
   const abr$ : Observable<IABREstimation> =
-    abrManager.get$(adaptation.type, abrClock$, adaptation.representations)
+    abrManager.get$(adaptation.type, abrClock$, decryptableRepresentations)
       .pipe(shareReplay({ refCount: true }));
 
   // emit when the current RepresentationBuffer should be stopped right now
