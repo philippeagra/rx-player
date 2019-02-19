@@ -17,7 +17,7 @@
 import IRepresentationIndex from "./representation_index";
 
 interface IContentProtection {
-  keyId?: string;
+  keyId : Uint8Array;
   systemId?: string;
 }
 
@@ -67,9 +67,34 @@ class Representation {
    */
   public frameRate? : string;
 
+  /**
+   * A string describing the codec used for this Representation.
+   * Examples: vp9, hvc, stpp
+   * undefined if we do not know.
+   * @type {string|undefined}
+   */
   public codec? : string;
+
+  /**
+   * A string describing the mime-type for this Representation.
+   * Examples: audio/mp4, video/webm, application/mp4, text/plain
+   * undefined if we do not know.
+   * @type {string|undefined}
+   */
   public mimeType? : string;
+
+  /**
+   * If this Representation is linked to video content, this value is the width
+   * in pixel of the corresponding video data.
+   * @type {number|undefined}
+   */
   public width? : number;
+
+  /**
+   * If this Representation is linked to video content, this value is the height
+   * in pixel of the corresponding video data.
+   * @type {number|undefined}
+   */
   public height? : number;
 
   /**
@@ -77,6 +102,17 @@ class Representation {
    * @type {Array.<Object>}
    */
   public contentProtections? : IContentProtection[];
+
+ /**
+  * Whether we are able to decrypt this Representation / unable to decrypt it or
+  * if we don't know yet:
+  *   - if `true`, it means that we know we were able to decrypt this
+  *     Representation in the current content.
+  *   - if `false`, it means that we know we were unable to decrypt this
+  *     Representation
+  *   - if `undefined` there is no certainty on this matter
+  */
+  public decryptable? : boolean;
 
   /**
    * @constructor
