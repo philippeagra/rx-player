@@ -34,8 +34,8 @@ export interface IEMEInitEvent {
   type: "eme-init";
 }
 
-export interface IKeyStatusChangeEvent {
-  type : "key-statuses-change";
+export interface IRestrictionUpdates {
+  type : "restriction-updates";
   value: {
     statuses: Array<{
       keyStatus: MediaKeyStatus;

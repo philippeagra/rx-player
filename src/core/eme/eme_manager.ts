@@ -52,8 +52,8 @@ import setServerCertificate from "./set_server_certificate";
 import {
   IEMEInitEvent,
   IEMEWarningEvent,
-  IKeyStatusChangeEvent,
   IKeySystemOption,
+  IRestrictionUpdates,
 } from "./types";
 import InitDataStore from "./utils/init_data_store";
 
@@ -87,7 +87,7 @@ export type IEMEManagerEvent =
   IEMEWarningEvent |
   IEMEInitEvent |
   ILicenseUpdatedEvent |
-  IKeyStatusChangeEvent;
+  IRestrictionUpdates;
 
 /**
  * EME abstraction and event handler used to communicate with the Content-

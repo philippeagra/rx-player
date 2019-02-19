@@ -49,8 +49,8 @@ import retryObsWithBackoff from "../../utils/rx-retry_with_backoff";
 import tryCatch from "../../utils/rx-try_catch";
 import {
   IEMEWarningEvent,
-  IKeyStatusChangeEvent,
   IKeySystemOption,
+  IRestrictionUpdates,
 } from "./types";
 
 const {
@@ -126,7 +126,7 @@ function licenseErrorSelector(
 export default function handleSessionEvents(
   session: MediaKeySession|ICustomMediaKeySession,
   keySystem: IKeySystemOption
-) : Observable<ILicenseUpdatedEvent|IEMEWarningEvent|IKeyStatusChangeEvent> {
+) : Observable<ILicenseUpdatedEvent|IEMEWarningEvent|IRestrictionUpdates> {
   log.debug("EME: Handle message events", session);
 
   const sessionWarningSubject$ = new Subject<IEMEWarningEvent>();
@@ -149,7 +149,7 @@ export default function handleSessionEvents(
   const keyStatusesChanges : Observable<
     ILicenseUpdateEvent |
     IEMEWarningEvent |
-    IKeyStatusChangeEvent
+    IRestrictionUpdates
   > = onKeyStatusesChange$(session)
     .pipe(mergeMap((keyStatusesEvent: Event) => {
       log.debug("EME: keystatuseschange event", session, keyStatusesEvent);
@@ -191,8 +191,8 @@ export default function handleSessionEvents(
       });
 
       const warnings$ = warnings.length ? observableOf(...warnings) : EMPTY;
-      const statusesChange$ = statuses.length ? observableOf({
-        type: "key-statuses-change" as "key-statuses-change",
+      const restrictionUpdates$ = statuses.length ? observableOf({
+        type: "restriction-updates" as "restriction-updates",
         value: { statuses },
       }) : EMPTY;
       const handledKeyStatusesChange$ = tryCatch(() => {
@@ -214,7 +214,7 @@ export default function handleSessionEvents(
             },
           }))
         );
-      return observableConcat(warnings$, statusesChange$, handledKeyStatusesChange$);
+      return observableConcat(warnings$, restrictionUpdates$, handledKeyStatusesChange$);
     }));
 
   const keyMessages$ : Observable<ILicenseUpdateEvent> =
@@ -249,8 +249,8 @@ export default function handleSessionEvents(
 
   const sessionUpdates = observableMerge(keyMessages$, keyStatusesChanges)
     .pipe(
-      concatMap((evt : ILicenseUpdateEvent|IEMEWarningEvent|IKeyStatusChangeEvent) :
-        Observable<ILicenseUpdatedEvent|IEMEWarningEvent|IKeyStatusChangeEvent> => {
+      concatMap((evt : ILicenseUpdateEvent|IEMEWarningEvent|IRestrictionUpdates) :
+        Observable<ILicenseUpdatedEvent|IEMEWarningEvent|IRestrictionUpdates> => {
           if (evt.type !== "license-update") {
             return observableOf(evt);
           }
