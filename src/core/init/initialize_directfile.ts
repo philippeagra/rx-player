@@ -154,7 +154,7 @@ export default function initializeDirectfileContent({
   // issue.
   const emeManager$ = linkURL$.pipe(
     mergeMap(() => createEMEManager(mediaElement, keySystems)),
-    shareReplay({ refCount: true })
+    shareReplay()
   );
 
   // Translate errors coming from the media element into RxPlayer errors
@@ -176,7 +176,9 @@ export default function initializeDirectfileContent({
   const loadedEvent$ = emeManager$.pipe(
     filter(({ type }) => type === "eme-init" || type === "eme-disabled"),
     take(1),
-    mergeMapTo(load$),
+    mergeMap(() => {
+      return load$;
+    }),
     mergeMap((evt) => {
       if (evt === "autoplay-blocked") {
         const error = new MediaError("MEDIA_ERR_BLOCKED_AUTOPLAY",

@@ -198,13 +198,13 @@ export default function InitializeOnMediaSource({
 
   // Create and open a new MediaSource object on the given media element.
   const openMediaSource$ = openMediaSource(mediaElement)
-    .pipe(shareReplay({ refCount: true }));
+    .pipe(shareReplay());
 
   // Create EME Manager, an observable which will manage every EME-related
   // issue.
   const emeManager$ = openMediaSource$.pipe(
     mergeMap(() => createEMEManager(mediaElement, keySystems)),
-    shareReplay({ refCount: true })
+    shareReplay()
   );
 
   // Translate errors coming from the media element into RxPlayer errors
