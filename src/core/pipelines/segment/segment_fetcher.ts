@@ -112,6 +112,7 @@ export default function createSegmentFetcher<T>(
   return function fetchSegment(
     content : ISegmentLoaderArguments
   ) : Observable<IFetchedSegment<T>> {
+    const metricsAggregation: Array<{ size: number; duration: number }> = [];
     return segmentLoader(content).pipe(
 
       tap((arg) => {
@@ -126,12 +127,9 @@ export default function createSegmentFetcher<T>(
 
             // format it for ABR Handling
             if (size != null && duration != null) {
-              network$.next({
-                type: bufferType,
-                value: {
-                  size,
-                  duration,
-                },
+              metricsAggregation.push({
+                size,
+                duration,
               });
             }
             break;
@@ -193,6 +191,21 @@ export default function createSegmentFetcher<T>(
       ),
 
       finalize(() => {
+        const { totalSize, totalDuration } =
+        metricsAggregation.reduce((acc, { size, duration }) => {
+          acc.totalSize += size;
+          acc.totalDuration += duration;
+          return acc;
+        }, { totalSize: 0, totalDuration: 0 });
+
+        network$.next({
+          type: bufferType,
+          value: {
+            size: totalSize,
+            duration: totalDuration,
+          },
+        });
+
         if (request$ != null) {
           if (id != null) {
             request$.next({

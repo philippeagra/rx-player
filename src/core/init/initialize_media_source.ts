@@ -130,6 +130,7 @@ export interface IInitializeOptions {
   textTrackOptions : ITextTrackSourceBufferOptions;
   pipelines : ITransportPipelines;
   url : string;
+  lowLatencyMode : boolean;
 }
 
 // Every events emitted by Init.
@@ -169,6 +170,7 @@ export default function InitializeOnMediaSource({
   textTrackOptions,
   pipelines,
   url,
+  lowLatencyMode,
 } : IInitializeOptions) : Observable<IInitEvent> {
   const warning$ = new Subject<Error|ICustomError>();
 
@@ -194,7 +196,8 @@ export default function InitializeOnMediaSource({
 
   // Create ABR Manager, which will choose the right "Representation" for a
   // given "Adaptation".
-  const abrManager = new ABRManager(requestsInfos$, network$, adaptiveOptions);
+  const abrManager = new ABRManager(
+    requestsInfos$, network$, adaptiveOptions, lowLatencyMode);
 
   // Create and open a new MediaSource object on the given media element.
   const openMediaSource$ = openMediaSource(mediaElement).pipe(
@@ -265,7 +268,7 @@ export default function InitializeOnMediaSource({
     });
 
     log.debug("Init: Calculating initial time");
-    const initialTime = getInitialTime(manifest, startAt);
+    const initialTime = getInitialTime(manifest, lowLatencyMode, startAt);
     log.debug("Init: Initial time calculated:", initialTime);
 
     const reloadMediaSource$ = new Subject<void>();

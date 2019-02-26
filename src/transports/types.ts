@@ -279,6 +279,7 @@ export interface ITransportOptions {
   representationFilter? : IRepresentationFilter;
   supplementaryImageTracks? : ISupplementaryImageTrack[];
   supplementaryTextTracks? : ISupplementaryTextTrack[];
+  lowLatencyMode? : boolean;
 }
 
 export type ITransportFunction = (options? : ITransportOptions) =>

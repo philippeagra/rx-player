@@ -150,6 +150,7 @@ export interface ILoadVideoOptions {
   hideNativeSubtitle? : boolean;
   textTrackElement? : HTMLElement;
   manualBitrateSwitchingMode? : "seamless"|"direct";
+  lowLatencyMode? : boolean;
 }
 
 interface IParsedLoadVideoOptionsBase {
@@ -165,6 +166,7 @@ interface IParsedLoadVideoOptionsBase {
   defaultTextTrack : IDefaultTextTrackOption|null|undefined;
   startAt : IParsedStartAtOption|undefined;
   manualBitrateSwitchingMode : "seamless"|"direct";
+  lowLatencyMode : boolean;
 }
 
 interface IParsedLoadVideoOptionsNative extends IParsedLoadVideoOptionsBase {
@@ -459,6 +461,8 @@ function parseLoadVideoOptions(
     }
   }
 
+  const lowLatencyMode = options.lowLatencyMode || false;
+
   const networkConfig = options.networkConfig == null ? {} : {
     manifestRetry: options.networkConfig.manifestRetry,
     offlineRetry: options.networkConfig.offlineRetry,
@@ -483,6 +487,7 @@ function parseLoadVideoOptions(
     transport,
     transportOptions,
     url,
+    lowLatencyMode,
   } as IParsedLoadVideoOptions;
   /* tslint:enable no-object-literal-type-assertion */
 }

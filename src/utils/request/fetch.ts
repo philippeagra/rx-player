@@ -14,50 +14,30 @@
  * limitations under the License.
  */
 
-import { Observable ,  Observer } from "rxjs";
+import {
+  concat as observableConcat,
+  EMPTY,
+  Observable,
+  of as observableOf,
+} from "rxjs";
+import {
+  concatMap,
+  finalize,
+  map,
+  mergeMap,
+} from "rxjs/operators";
 import config from "../../config";
+import castToObservable from "../cast_to_observable";
+import {
+  IRequestOptions,
+  IRequestProgress,
+  IRequestResponse
+} from "./types";
 // import { RequestError, RequestErrorTypes } from "../../errors";
 
 const { DEFAULT_REQUEST_TIMEOUT } = config;
 
 // const DEFAULT_RESPONSE_TYPE : XMLHttpRequestResponseType = "json";
-
-// Interface for "progress" events
-export interface IRequestProgress {
-  type : "progress";
-  value : {
-    currentTime : number;
-    duration : number;
-    size : number;
-    sendingTime : number;
-    url : string;
-    totalSize? : number;
-  };
-}
-
-// Interface for "response" events
-export interface IRequestResponse<T, U> {
-  type : "response";
-  value : {
-    duration : number;
-    receivedTime : number;
-    responseData : T;
-    responseType : U;
-    sendingTime : number;
-    size : number;
-    status : number;
-    url : string;
-  };
-}
-
-// Arguments for the "request" utils
-export interface IRequestOptions<T, U> {
-  url : string;
-  headers? : { [ header: string ] : string }|null;
-  responseType? : T;
-  timeout? : number;
-  ignoreProgressEvents? : U;
-}
 
 // /**
 //  * @param {string} data
@@ -119,9 +99,6 @@ function request<T>(
     typeof (window as any).AbortController === "function" ?
       new (window as any).AbortController() : null;
 
-  return Observable.create((
-    obs : Observer<IRequestResponse<T, string>|IRequestProgress>
-  ) => {
     if (options.headers != null) {
       const headerNames = Object.keys(options.headers);
       for (let i = 0; i < headerNames.length; i++) {
@@ -134,62 +111,120 @@ function request<T>(
     const timeout = window.setTimeout(() => {
       // timeouted = true;
       abortController.abort();
-    }, options.timeout == null ? options.timeout : DEFAULT_REQUEST_TIMEOUT);
+    }, options.timeout == null ? DEFAULT_REQUEST_TIMEOUT : options.timeout);
 
     const sendingTime = performance.now();
-    fetch(options.url, {
-      headers,
-      method: "GET",
-      signal: abortController.signal,
-    }).then((response) => {
-      if (timeout != null) {
-        clearTimeout(timeout);
-      }
-
-      const responseType = !options.responseType || options.responseType === "document" ?
-        "text" : options.responseType;
-      return (() => {
-        switch (responseType) {
-          case "arraybuffer":
-            return response.arrayBuffer();
-          case "json":
-            return response.json();
-          case "blob":
-            return response.blob();
-          case "text":
-            return response.text();
+    let lastSentTime = sendingTime;
+    return castToObservable(
+      fetch(
+        options.url, {
+          headers,
+          method: "GET",
+          signal: abortController.signal,
         }
-      })().then(responseData => {
-        const receivedTime = performance.now();
-        obs.next({
-          type: "response",
-          value: {
-            responseType,
-            status: response.status,
-            url: response.url,
-            sendingTime,
-            receivedTime,
-            duration: receivedTime - sendingTime,
-            size: responseData instanceof ArrayBuffer ?
-            responseData.byteLength : 0,
-            responseData,
-          },
-        });
-        obs.complete();
-      });
-    // }).catch((e) => {
-    //   if (timeouted) {
-    //     const errorCode = RequestErrorTypes.TIMEOUT;
-    //     obs.error(new RequestError(xhr /* TODO */, url, errorCode));
-    //     return;
-    //   }
-    });
+      )
+    ).pipe(
+      concatMap((response) => {
+        if (timeout != null) {
+          clearTimeout(timeout);
+        }
 
-      return () => {
-        // canceled = true;
+        const responseType =
+          !options.responseType || options.responseType === "document" ?
+            "text" : options.responseType;
+
+        if (
+          responseType === "arraybuffer" &&
+          response.body
+        ) {
+          const reader = response.body.getReader();
+
+          /**
+           * Read last bytes from readable bytstream.
+           * @return {Observable}
+           */
+          function readBuffer(): Observable<
+            IRequestResponse<ArrayBuffer, "arraybuffer">
+          > {
+            return castToObservable(reader.read()).pipe(mergeMap(handleFetchedBytes));
+          }
+
+          /**
+           * Handle fetched bytes from response's reader
+           * @param {Object} chunk
+           * @return {Observable}
+           */
+          function handleFetchedBytes(
+            chunk: { done: boolean; value: Uint8Array }
+          ): Observable<IRequestResponse<ArrayBuffer, "arraybuffer">> {
+            const receivedTime = performance.now();
+            const duration = receivedTime - lastSentTime;
+            lastSentTime = receivedTime;
+            const { value, done } = chunk;
+            return done ? EMPTY :
+              observableConcat(
+                value != null && responseType === "arraybuffer" ? observableOf({
+                  type: "response" as "response",
+                  value: {
+                    responseType,
+                    status: response.status,
+                    url: response.url,
+                    sendingTime,
+                    receivedTime,
+                    duration,
+                    size: value.length,
+                    responseData: value.buffer,
+                  },
+                }) : EMPTY,
+                readBuffer()
+              );
+          }
+
+          return readBuffer();
+        } else {
+          return castToObservable((() => {
+            switch (responseType) {
+              case "arraybuffer":
+                return response.arrayBuffer();
+              case "json":
+                return response.json();
+              case "blob":
+                return response.blob();
+              case "text":
+                return response.text();
+            }
+          })()).pipe(
+            map((responseData) => {
+              const receivedTime = performance.now();
+              return {
+                type: "response" as "response",
+                value: {
+                  responseType,
+                  status: response.status,
+                  url: response.url,
+                  sendingTime,
+                  receivedTime,
+                  duration: receivedTime - sendingTime,
+                  size: responseData instanceof ArrayBuffer ?
+                  responseData.byteLength : 0,
+                  responseData,
+                },
+              };
+            })
+          );
+        }
+      // }).catch((e) => {
+      //   if (timeouted) {
+      //     const errorCode = RequestErrorTypes.TIMEOUT;
+      //     obs.error(new RequestError(xhr /* TODO */, url, errorCode));
+      //     return;
+      //   }
+      // });
+      }),
+      finalize(() => {
         abortController.abort();
-      };
-  });
+      })
+  );
 }
 
 /**

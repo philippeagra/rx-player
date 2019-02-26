@@ -37,7 +37,8 @@ interface IRegularSegmentLoaderArguments extends ISegmentLoaderArguments {
  * @returns {Observable}
  */
 function regularSegmentLoader(
-  { url, segment } : IRegularSegmentLoaderArguments
+  { url, segment } : IRegularSegmentLoaderArguments,
+  lowLatencyMode : boolean
 ) : ILoaderObservable<ArrayBuffer> {
   const { range, indexRange } = segment;
 
@@ -52,13 +53,13 @@ function regularSegmentLoader(
           Math.max(range[1], indexRange[1]),
         ]),
       },
-    });
+    }, lowLatencyMode);
   }
   return request({
     url,
     responseType: "arraybuffer",
     headers: range ? { Range: byteRange(range) } : null,
-  });
+  }, lowLatencyMode);
 }
 
 /**
@@ -66,7 +67,10 @@ function regularSegmentLoader(
  * @param {Function} [customSegmentLoader]
  * @returns {Function}
  */
-const segmentPreLoader = (customSegmentLoader? : CustomSegmentLoader) => ({
+const segmentPreLoader = (
+  lowLatencyMode : boolean,
+  customSegmentLoader? : CustomSegmentLoader
+) => ({
   adaptation,
   manifest,
   period,
@@ -90,10 +94,11 @@ const segmentPreLoader = (customSegmentLoader? : CustomSegmentLoader) => ({
     segment,
     transport: "dash",
     url: mediaURL,
+    lowLatencyMode,
   };
 
   if (!customSegmentLoader) {
-    return regularSegmentLoader(args);
+    return regularSegmentLoader(args, lowLatencyMode);
   }
 
   return new Observable((obs : ILoaderObserver<Uint8Array|ArrayBuffer>) => {
@@ -140,7 +145,7 @@ const segmentPreLoader = (customSegmentLoader? : CustomSegmentLoader) => ({
      */
     const fallback = () => {
       hasFallbacked = true;
-      regularSegmentLoader(args).subscribe(obs);
+      regularSegmentLoader(args, lowLatencyMode).subscribe(obs);
     };
 
     const callbacks = { reject, resolve, fallback };

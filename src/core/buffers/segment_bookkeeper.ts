@@ -300,14 +300,19 @@ export default class SegmentBookkeeper {
       const segmentI = inventory[i];
 
       if ((segmentI.start) <= start) {
-        if ((segmentI.end) <= start) {
-          // our segment is after, push it after this one
-          //
-          // Case 1:
+        if ((segmentI.end) === start) {
+          // Case:
           //   segmentI     : |------|
           //   newSegment   :        |------|
           //
-          // Case 2:
+          if (segmentI.infos.segment.id === segment.id) {
+            this.inventory[i].end = end;
+          } else {
+            this.inventory.splice(i + 1, 0, newSegment);
+          }
+        } else if ((segmentI.end) < start) {
+          // our segment is after, push it after this one
+          // Case:
           //   segmentI     : |------|
           //   newSegment   :          |------|
           this.inventory.splice(i + 1, 0, newSegment);
@@ -366,10 +371,17 @@ export default class SegmentBookkeeper {
 
             // (if segment's end is not known yet, it could perfectly
             // end before the one we're adding now)
-            if (segmentI.end != null) {
-              segmentI.end = start;
+            if (
+              segmentI.infos.segment.id === segment.id &&
+              end != null
+              ) {
+              this.inventory[i].end = end;
+            } else {
+              if (segmentI.end != null) {
+                segmentI.end = start;
+              }
+              this.inventory.splice(i + 1, 0, newSegment);
             }
-            this.inventory.splice(i + 1, 0, newSegment);
             return;
           }
         }
@@ -408,31 +420,43 @@ export default class SegmentBookkeeper {
         // newSegment   : |???*
         //
         // *|??? - unknown end
-        this.inventory.splice(0, 0, newSegment);
+        if (segment.id === firstSegment.infos.segment.id && start) {
+          firstSegment.start = start;
+          if (end && end > firstSegment.end) {
+            firstSegment.end = end;
+          }
+        } else {
+          this.inventory.splice(0, 0, newSegment);
+        }
       }
       return;
     }
 
-    if (firstSegment.start >= end) {
+    if (firstSegment.start === end) {
       // our segment is before, put it before
       // Case 1:
-      //  firstSegment :      |----|
-      //  newSegment   : |----|
-      //
-      // Case 2:
       //  firstSegment :        |----|
       //  newSegment   : |----|
       //
-      // Case 3:
+      // Case 2:
       //  firstSegment :        |???*
-      //  newSegment   : |----|
-      //
-      // Case 4:
-      //  firstSegment :      |???*
       //  newSegment   : |----|
       //
       // *|??? - unknown end
       this.inventory.splice(0, 0, newSegment);
+    } else if (firstSegment.start > end) {
+      // Case 1:
+      //  firstSegment :      |???*
+      //  newSegment   : |----|
+      // Case 2:
+      //  firstSegment :      |----|
+      //  newSegment   : |----|
+      //
+      if (firstSegment.infos.segment.id === segment.id) {
+        firstSegment.start = start;
+      } else {
+        this.inventory.splice(0, 0, newSegment);
+      }
     } else if ((firstSegment.end) <= end) {
       // Our segment is bigger, replace the first
       // Case 1:
@@ -455,8 +479,15 @@ export default class SegmentBookkeeper {
       // newSegment   : |-----|
       //
       // *|??? - unknown end
-      firstSegment.start = end;
-      this.inventory.splice(0, 0, newSegment);
+      if (firstSegment.infos.segment.id === segment.id) {
+        firstSegment.start = start;
+        if (end && end > firstSegment.end) {
+          firstSegment.end = end;
+        }
+      } else {
+        firstSegment.start = end;
+        this.inventory.splice(0, 0, newSegment);
+      }
     }
   }
 

@@ -68,7 +68,8 @@ const defaultChooserOptions = {
  */
 const createChooser = (
   type : IBufferType,
-  options : IRepresentationChoosersOptions
+  options : IRepresentationChoosersOptions,
+  lowLatencyMode : boolean
 ) : RepresentationChooser => {
   return new RepresentationChooser({
     limitWidth$: options.limitWidth[type],
@@ -76,6 +77,7 @@ const createChooser = (
     initialBitrate: options.initialBitrates[type],
     manualBitrate: options.manualBitrates[type],
     maxAutoBitrate: options.maxAutoBitrates[type],
+    lowLatencyMode,
   });
 };
 
@@ -88,6 +90,7 @@ const createChooser = (
  */
 export default class ABRManager {
   private readonly _dispose$: Subject<void>;
+  private readonly _lowLatencyMode : boolean;
 
   private _choosers:  Partial<Record<IBufferType, RepresentationChooser>>;
   private _chooserInstanceOptions: IRepresentationChoosersOptions;
@@ -156,8 +159,11 @@ export default class ABRManager {
   constructor(
     requests$: Observable<Observable<IRequest>>,
     metrics$: Observable<IMetric>,
-    options : IRepresentationChoosersOptions = defaultChooserOptions
+    options : IRepresentationChoosersOptions = defaultChooserOptions,
+    lowLatencyMode : boolean
   ) {
+    this._lowLatencyMode = lowLatencyMode;
+
     // Subject emitting and completing on dispose.
     // Used to clean up every created observables.
     this._dispose$ = new Subject();
@@ -325,7 +331,7 @@ export default class ABRManager {
     if (!this._choosers[bufferType]) {
       log.debug("ABR: Creating new buffer for ", bufferType);
       this._choosers[bufferType] =
-        createChooser(bufferType, this._chooserInstanceOptions);
+        createChooser(bufferType, this._chooserInstanceOptions, this._lowLatencyMode);
     }
     return this._choosers[bufferType] as RepresentationChooser;
   }

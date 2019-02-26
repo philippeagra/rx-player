@@ -91,8 +91,7 @@ function isMediaInfoState(state : string) : state is IMediaInfosState {
 }
 
 const {
-  SAMPLING_INTERVAL_MEDIASOURCE,
-  SAMPLING_INTERVAL_NO_MEDIASOURCE,
+  SAMPLING_INTERVAL,
   RESUME_GAP_AFTER_SEEKING,
   RESUME_GAP_AFTER_NOT_ENOUGH_DATA,
   RESUME_GAP_AFTER_BUFFERING,
@@ -120,7 +119,7 @@ const SCANNED_MEDIA_ELEMENTS_EVENTS = [
  * @param {Object|null} stalled
  * @returns {Number}
  */
-function getResumeGap(stalled : stalledStatus) : number {
+function getResumeGap(stalled : stalledStatus, lowLatencyMode? : boolean) : number {
   if (!stalled) {
     return 0;
   }
@@ -129,9 +128,11 @@ function getResumeGap(stalled : stalledStatus) : number {
     case "seeking":
       return RESUME_GAP_AFTER_SEEKING;
     case "not-ready":
-      return RESUME_GAP_AFTER_NOT_ENOUGH_DATA;
+      return lowLatencyMode ? RESUME_GAP_AFTER_NOT_ENOUGH_DATA.LOW_LATENCY_MODE :
+        RESUME_GAP_AFTER_NOT_ENOUGH_DATA.DEFAULT;
     default:
-      return RESUME_GAP_AFTER_BUFFERING;
+      return lowLatencyMode ? RESUME_GAP_AFTER_BUFFERING.LOW_LATENCY_MODE :
+        RESUME_GAP_AFTER_BUFFERING.DEFAULT ;
   }
 }
 
@@ -142,9 +143,10 @@ function getResumeGap(stalled : stalledStatus) : number {
  */
 function hasLoadedUntilTheEnd(
   currentRange : { start : number; end : number }|null,
-  duration : number
+  duration : number,
+  stallGap : number
 ) : boolean {
-  return currentRange != null && (duration - currentRange.end) <= STALL_GAP;
+  return currentRange != null && (duration - currentRange.end) <= stallGap;
 }
 
 /**
@@ -199,7 +201,8 @@ function getMediaInfos(
 function getStalledStatus(
   prevTimings : IClockTick,
   currentTimings : IMediaInfos,
-  withMediaSource : boolean
+  withMediaSource : boolean,
+  lowLatencyMode : boolean
 ) : stalledStatus {
   const {
     state: currentState,
@@ -218,7 +221,8 @@ function getStalledStatus(
     currentTime: prevTime,
   } = prevTimings;
 
-  const fullyLoaded = hasLoadedUntilTheEnd(currentRange, duration);
+  const stallGap = lowLatencyMode ? STALL_GAP.LOW_LATENCY_MODE : STALL_GAP.DEFAULT;
+  const fullyLoaded = hasLoadedUntilTheEnd(currentRange, duration, stallGap);
 
   const canStall = (
     readyState >= 1 &&
@@ -233,14 +237,14 @@ function getStalledStatus(
   if (withMediaSource) {
     if (
       canStall &&
-      (bufferGap <= STALL_GAP || bufferGap === Infinity || readyState === 1)
+      (bufferGap <= stallGap || bufferGap === Infinity || readyState === 1)
     ) {
       shouldStall = true;
     } else if (
       prevStalled &&
       readyState > 1 &&
       bufferGap < Infinity &&
-      (bufferGap > getResumeGap(prevStalled) || fullyLoaded || ended)
+      (bufferGap > getResumeGap(prevStalled, lowLatencyMode) || fullyLoaded || ended)
     ) {
       shouldUnstall = true;
     }
@@ -316,7 +320,8 @@ function getStalledStatus(
  */
 function createClock(
   mediaElement : HTMLMediaElement,
-  { withMediaSource } : { withMediaSource : boolean }
+  { withMediaSource } : { withMediaSource : boolean },
+  lowLatencyMode : boolean
 ) : Observable<IClockTick> {
   return new Observable((obs : Observer<IClockTick>) => {
     let lastTimings : IClockTick = objectAssign(getMediaInfos(mediaElement, "init"),
@@ -332,7 +337,8 @@ function createClock(
       const state : IMediaInfosState = evt && isMediaInfoState(evt.type) ?
         evt.type : "timeupdate";
       const mediaTimings = getMediaInfos(mediaElement, state);
-      const stalledState = getStalledStatus(lastTimings, mediaTimings, withMediaSource);
+      const stalledState = getStalledStatus(
+        lastTimings, mediaTimings, withMediaSource, lowLatencyMode);
 
       // /!\ Mutate mediaTimings
       lastTimings = objectAssign(mediaTimings,
@@ -342,9 +348,10 @@ function createClock(
       obs.next(lastTimings);
     }
 
-    const interval = withMediaSource
-      ? SAMPLING_INTERVAL_MEDIASOURCE
-      : SAMPLING_INTERVAL_NO_MEDIASOURCE;
+    const interval = lowLatencyMode ? SAMPLING_INTERVAL.LOW_LATENCY_MODE :
+      withMediaSource
+        ? SAMPLING_INTERVAL.MEDIASOURCE
+        : SAMPLING_INTERVAL.NO_MEDIASOURCE;
 
     const intervalID = setInterval(emitSample, interval);
     SCANNED_MEDIA_ELEMENTS_EVENTS.forEach((eventName) =>

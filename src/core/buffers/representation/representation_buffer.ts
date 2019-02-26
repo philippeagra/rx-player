@@ -36,6 +36,7 @@ import {
   Subject,
 } from "rxjs";
 import {
+  concatMap,
   finalize,
   map,
   mapTo,
@@ -186,6 +187,11 @@ export default function RepresentationBuffer<T>({
   // null if no request is pending.
   let currentSegmentRequest : ISegmentRequestObject<T>|null = null;
 
+  /**
+   * Is downloading init segment
+   */
+  let isDownloadingInitSegment : boolean = false;
+
   // Keep track of downloaded segments currently awaiting to be appended to the
   // SourceBuffer.
   const sourceBufferWaitingQueue = new SimpleSet();
@@ -250,19 +256,23 @@ export default function RepresentationBuffer<T>({
 
       if (status.terminate) {
         downloadQueue = [];
-        if (currentSegmentRequest == null) {
+        if (currentSegmentRequest == null && !isDownloadingInitSegment) {
           log.debug("Buffer: no request, terminate.", bufferType);
           startQueue$.complete(); // complete the downloading queue
           return observableOf({ type: "terminated" as "terminated" });
         } else if (
           mostNeededSegment == null ||
+          currentSegmentRequest &&
           currentSegmentRequest.segment.id !== mostNeededSegment.segment.id
         ) {
           log.debug("Buffer: cancel request and terminate.", bufferType);
           startQueue$.next(); // interrupt the current request
           startQueue$.complete(); // complete the downloading queue
           return observableOf({ type: "terminated" as "terminated" });
-        } else if (currentSegmentRequest.priority !== mostNeededSegment.priority) {
+        } else if (
+          currentSegmentRequest &&
+          currentSegmentRequest.priority !== mostNeededSegment.priority
+        ) {
           const { request$ } = currentSegmentRequest;
           segmentFetcher.updatePriority(request$, mostNeededSegment.priority);
           currentSegmentRequest.priority = mostNeededSegment.priority;
@@ -281,11 +291,10 @@ export default function RepresentationBuffer<T>({
       }
 
       if (mostNeededSegment == null) {
-        if (currentSegmentRequest) {
+        if (currentSegmentRequest || isDownloadingInitSegment) {
           log.debug("Buffer: interrupt segment request.", bufferType);
+          return EMPTY;
         }
-        downloadQueue = [];
-        startQueue$.next(); // (re-)start with an empty queue
 
         return observableConcat(
           observableOf(...neededActions),
@@ -293,15 +302,19 @@ export default function RepresentationBuffer<T>({
         );
       }
 
-      if (!currentSegmentRequest) {
+      if (!currentSegmentRequest && !isDownloadingInitSegment) {
         log.debug("Buffer: start downloading queue.", bufferType);
         downloadQueue = neededSegments;
         startQueue$.next(); // restart the queue
-      } else if (currentSegmentRequest.segment.id !== mostNeededSegment.segment.id) {
-        log.debug("Buffer: restart download queue.", bufferType);
-        downloadQueue = neededSegments;
-        startQueue$.next(); // restart the queue
-      } else if (currentSegmentRequest.priority !== mostNeededSegment.priority) {
+        /// XXX TODO is this part of code usefull ?
+      // } else if (currentSegmentRequest.segment.id !== mostNeededSegment.segment.id) {
+      //   log.debug("Buffer: restart download queue.", bufferType);
+      //   downloadQueue = neededSegments;
+      //   startQueue$.next(); // restart the queue
+      } else if (
+        currentSegmentRequest &&
+        currentSegmentRequest.priority !== mostNeededSegment.priority
+      ) {
         log.debug("Buffer: update request priority.", bufferType);
         const { request$ } = currentSegmentRequest;
         segmentFetcher.updatePriority(request$, mostNeededSegment.priority);
@@ -356,22 +369,35 @@ export default function RepresentationBuffer<T>({
         const context = { manifest, period, adaptation, representation, segment };
         const request$ = segmentFetcher.createRequest(context, priority);
 
-        currentSegmentRequest = { segment, priority, request$ };
+        if (segment.isInit) {
+          isDownloadingInitSegment = true;
+        } else {
+          currentSegmentRequest = { segment, priority, request$ };
+        }
         const response$ = request$.pipe(
-          mergeMap((fetchedSegment) => {
-            currentSegmentRequest = null;
+          concatMap((fetchedSegment) => {
             const initInfos = initSegmentObject &&
               initSegmentObject.segmentInfos || undefined;
             return fetchedSegment.parse(initInfos);
           }),
-          map((args) => ({ segment, value: args }))
+          map((args) => ({ segment, value: args })),
+          finalize(() => {
+            if (segment.isInit) {
+              isDownloadingInitSegment = false;
+            } else {
+              currentSegmentRequest = null;
+            }
+          })
         );
 
         return observableConcat(response$, requestNextSegment$);
       });
 
     return requestNextSegment$
-      .pipe(finalize(() => { currentSegmentRequest = null; }));
+      .pipe(finalize(() => {
+        currentSegmentRequest = null;
+        isDownloadingInitSegment = false;
+      }));
   }
 
   /**
@@ -419,7 +445,17 @@ export default function RepresentationBuffer<T>({
             .insert(period, adaptation, representation, segment, start, end);
         }),
         finalize(() => { // remove from queue
-          sourceBufferWaitingQueue.remove(segment.id);
+          const hasPlayableSegment = segmentBookkeeper.hasPlayableSegment(
+            { start: segment.time, end: (segment.duration || 0) + segment.time },
+            {
+              time: segment.time,
+              duration: segment.duration || 0,
+              timescale: segment.timescale,
+            }
+          );
+          if (hasPlayableSegment) {
+            sourceBufferWaitingQueue.remove(segment.id);
+          }
         }));
     });
   }

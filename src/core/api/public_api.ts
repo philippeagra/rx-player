@@ -667,6 +667,7 @@ class Player extends EventEmitter<IPublicAPIEvent> {
       transport,
       transportOptions,
       url,
+      lowLatencyMode,
     } = options;
 
     // Perform multiple checks on the given options
@@ -699,7 +700,8 @@ class Player extends EventEmitter<IPublicAPIEvent> {
     const videoElement = this.videoElement;
 
     // Global clock used for the whole application.
-    const clock$ = createClock(videoElement, { withMediaSource: !isDirectFile });
+    const clock$ = createClock(
+      videoElement, { withMediaSource: !isDirectFile }, lowLatencyMode);
 
     const contentIsStopped$ = observableMerge(
       this._priv_stopCurrentContent$,
@@ -717,6 +719,7 @@ class Player extends EventEmitter<IPublicAPIEvent> {
       const pipelines = transportFn(objectAssign({
         supplementaryTextTracks,
         supplementaryImageTracks,
+        lowLatencyMode,
       }, transportOptions));
 
       // Options used by the ABR Manager.
@@ -762,6 +765,7 @@ class Player extends EventEmitter<IPublicAPIEvent> {
         startAt,
         textTrackOptions,
         url,
+        lowLatencyMode,
       })
         .pipe(takeUntil(contentIsStopped$))
         .pipe(publish()) as ConnectableObservable<IInitEvent>;

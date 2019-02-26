@@ -345,6 +345,41 @@ function getMDHDTimescale(buffer : Uint8Array) : number {
 }
 
 /**
+ * Get data mdat batch from segment data (every part of segment data that
+ * ends with a mdat box).
+ * @param {Uint8Array} buffer
+ * @param {Number} position
+ * @returns {Object}
+ */
+export function getISOBMFFMdatBatch(
+  buffer: Uint8Array,
+  position: number = 0
+): { chunks: Uint8Array[]; position: number } {
+  let _position = position;
+  const chunks: Uint8Array[] = [];
+  while (_position >= 0) {
+    const mdatIndex =
+      findBox(buffer.subarray(_position, Infinity), 0x6d646174 /* mdat */);
+    const mdatLen = be4toi(buffer, mdatIndex + _position);
+    const mdatBoxEnd = mdatIndex + mdatLen + _position;
+    if (mdatBoxEnd <= buffer.length) {
+      const chunk = buffer.subarray(_position, mdatBoxEnd);
+      chunks.push(chunk);
+      _position = mdatBoxEnd;
+    } else {
+      return {
+        chunks,
+        position: _position,
+      };
+    }
+  }
+  return {
+    chunks,
+    position: _position,
+  };
+}
+
+/**
  * Create a new ISOBMFF box.
  * @param {string} name - The box name (e.g. sidx, moov, pssh etc.)
  * @param {Uint8Array} buff - The box's content
