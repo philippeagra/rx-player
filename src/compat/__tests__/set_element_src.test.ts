@@ -29,6 +29,7 @@ describe("compat - setElementSrc", () => {
 
     const mockLogInfo = jest.fn((message) => message);
     jest.mock("../../log", () => ({
+      __esModule: true,
       info: mockLogInfo,
     }));
     const mockClearElementSrc = jest.fn(() => {
