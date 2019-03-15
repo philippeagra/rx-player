@@ -16,11 +16,13 @@
 
 import createManifestPipeline, {
   IFetchManifestResult,
+  IManifestParserOptions,
   IRequestSchedulerOptions,
 } from "./create_manifest_pipeline";
 
 export default createManifestPipeline;
 export {
   IFetchManifestResult,
+  IManifestParserOptions,
   IRequestSchedulerOptions,
 };

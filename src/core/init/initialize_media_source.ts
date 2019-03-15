@@ -56,6 +56,7 @@ import {
 } from "../eme";
 import {
   createManifestPipeline,
+  IManifestParserOptions,
   IPipelineOptions,
   SegmentPipelinesManager,
 } from "../pipelines";
@@ -172,13 +173,25 @@ export default function InitializeOnMediaSource({
 } : IInitializeOptions) : Observable<IInitEvent> {
   const warning$ = new Subject<Error|ICustomError>();
 
-  // Fetch and parse the manifest from the URL given.
-  // Throttled to avoid doing multiple simultaneous requests.
-  const fetchManifest = throttle(createManifestPipeline(
+  const manifestPipelines = createManifestPipeline(
     pipelines,
     getManifestPipelineOptions(networkConfig),
     warning$
-  ));
+  );
+
+  // Fetch and parse the manifest from the URL given.
+  // Throttled to avoid doing multiple simultaneous requests.
+  const fetchManifest = throttle((
+    manifestURL : string,
+    manifestParserOptions : IManifestParserOptions
+  ) =>
+    manifestPipelines.fetch(manifestURL).pipe(
+      mergeMap((response) =>
+        manifestPipelines.parse(response.value, manifestURL, manifestParserOptions)
+      ),
+      share()
+    )
+  );
 
   // Subject through which network metrics will be sent by the segment
   // pipelines to the ABR manager.
