@@ -73,11 +73,13 @@ export interface IPipelineLoaderRequest<T> {
 
 export interface IPipelineLoaderResponse<T> {
   type : "response";
-  value : {
-    responseData : T;
-    url? : string;
-    sendingTime? : number;
-  };
+  value : IPipelineLoaderResponseValue<T>;
+}
+
+export interface IPipelineLoaderResponseValue<T> {
+  responseData : T;
+  url? : string;
+  sendingTime? : number;
 }
 
 /**

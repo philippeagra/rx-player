@@ -54,7 +54,7 @@ export type IParserResponse<T> =
  */
 export default function parseMPD(
   root : Element,
-  uri : string
+  uri? : string
 ) : IParserResponse<IParsedManifest> {
   // Transform whole MPD into a parsed JS object representation
   const mpdIR = createMPDIntermediateRepresentation(root);
@@ -69,7 +69,7 @@ export default function parseMPD(
  */
 function loadExternalRessourcesAndParse(
   mpdIR : IMPDIntermediateRepresentation,
-  uri : string
+  uri? : string
 ) : IParserResponse<IParsedManifest> {
   const xlinksToLoad : Array<{ index : number; ressource : string }> = [];
   for (let i = 0; i < mpdIR.children.periods.length; i++) {
@@ -128,14 +128,17 @@ function loadExternalRessourcesAndParse(
  */
 function parseCompleteIntermediateRepresentation(
   mpdIR : IMPDIntermediateRepresentation,
-  uri : string
+  uri? : string
 ) : IParsedManifest {
   const {
     children: rootChildren,
     attributes: rootAttributes,
   } = mpdIR;
 
-  const baseURL = resolveURL(normalizeBaseURL(uri), rootChildren.baseURL);
+  const baseURL = resolveURL(
+    normalizeBaseURL(uri == null ? "" : uri),
+    rootChildren.baseURL
+  );
 
   const isDynamic : boolean = rootAttributes.type === "dynamic";
   const availabilityStartTime = (
@@ -177,7 +180,7 @@ function parseCompleteIntermediateRepresentation(
     periods: parsedPeriods,
     transportType: "dash",
     isLive: isDynamic,
-    uris: [uri, ...rootChildren.locations],
+    uris: uri == null ? rootChildren.locations : [uri, ...rootChildren.locations],
     suggestedPresentationDelay: rootAttributes.suggestedPresentationDelay != null ?
       rootAttributes.suggestedPresentationDelay :
       config.DEFAULT_SUGGESTED_PRESENTATION_DELAY.DASH,

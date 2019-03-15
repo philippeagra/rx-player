@@ -128,7 +128,7 @@ export type ILoaderObservable<T> = Observable<ILoaderEvent<T>>;
 
 export interface IManifestParserArguments<T, U> {
   response : ILoaderResponseValue<T>; // Response from the loader
-  url : string; // URL originally requested
+  url? : string; // URL originally requested
 
   // allow the parser to load supplementary ressources (of type U)
   scheduleRequest : (request : () => Observable<U>) => Observable<U>;

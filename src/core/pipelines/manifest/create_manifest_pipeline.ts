@@ -22,8 +22,6 @@ import {
   catchError,
   filter,
   map,
-  mergeMap,
-  share,
   tap,
 } from "rxjs/operators";
 import config from "../../../config";
@@ -44,6 +42,7 @@ import downloadingBackoff from "../utils/backoff";
 import createLoader, {
   IPipelineLoaderOptions,
   IPipelineLoaderResponse,
+  IPipelineLoaderResponseValue,
 } from "../utils/create_loader";
 
 const {
@@ -82,6 +81,14 @@ function errorSelector(code : string, error : Error, fatal : boolean) : ICustomE
   return error;
 }
 
+export interface ICoreManifestPipeline {
+  fetch(url : string) : Observable<IPipelineLoaderResponse<Document|string>>;
+  parse(
+    response : IPipelineLoaderResponseValue<Document|string>,
+    url? : string
+  ) : Observable<IFetchManifestResult>;
+}
+
 /**
  * Create function allowing to easily fetch and parse the manifest from its URL.
  *
@@ -102,7 +109,7 @@ export default function createManifestPipeline(
   pipelines : ITransportPipelines,
   pipelineOptions : IPipelineManifestOptions,
   warning$ : Subject<Error|ICustomError>
-) : (url : string) => Observable<IFetchManifestResult> {
+) : ICoreManifestPipeline {
   const loader = createLoader<
     IManifestLoaderArguments, Document|string
   >(pipelines.manifest, pipelineOptions);
@@ -132,42 +139,49 @@ export default function createManifestPipeline(
       }));
   }
 
-  /**
-   * Fetch and parse the manifest corresponding to the URL given.
-   * @param {string} url - URL of the manifest
-   * @returns {Observable}
-   */
-  return function fetchManifest(url : string) : Observable<IFetchManifestResult> {
-    return loader({ url }).pipe(
+  return {
+    /**
+     * Fetch the manifest corresponding to the URL given.
+     * @param {string} url - URL of the manifest
+     * @returns {Observable}
+     */
+    fetch(url : string) : Observable<IPipelineLoaderResponse<Document|string>> {
+      return loader({ url }).pipe(
+        tap((arg) => {
+          if (arg.type === "error") {
+            warning$.next(arg.value);
+          }
+        }),
+        filter((arg) : arg is IPipelineLoaderResponse<Document|string> =>
+          arg.type === "response"
+        )
+      );
+    },
 
-      tap((arg) => {
-        if (arg.type === "error") {
-          warning$.next(arg.value);
-        }
-      }),
-
-      filter((arg) : arg is IPipelineLoaderResponse<Document|string> =>
-        arg.type === "response"
-      ),
-
-      mergeMap(({ value }) => {
-        const { sendingTime } = value;
-        return parser({ response: value, url, scheduleRequest }).pipe(
-          catchError((error: Error) => {
-            const formattedError = isKnownError(error) ?
-              error : new OtherError("PIPELINE_PARSING_ERROR", error.toString(), true);
-            throw formattedError;
-          }),
-          map(({ manifest }) => {
-            const warnings = manifest.parsingErrors;
-            for (let i = 0; i < warnings.length; i++) {
-              warning$.next(warnings[i]); // TODO not through warning$
-            }
-            return { manifest, sendingTime };
-          })
-        );
-      }),
-      share()
-    );
+    /**
+     * Fetch the manifest corresponding to the URL given.
+     * @param {string} url - URL of the manifest
+     * @returns {Observable}
+     */
+    parse(
+      value : IPipelineLoaderResponseValue<Document|string>,
+      fetchedURL? : string
+    ) : Observable<IFetchManifestResult> {
+      const { sendingTime } = value;
+      return parser({ response: value, url: fetchedURL, scheduleRequest }).pipe(
+        catchError((error: Error) => {
+          const formattedError = isKnownError(error) ?
+            error : new OtherError("PIPELINE_PARSING_ERROR", error.toString(), true);
+          throw formattedError;
+        }),
+        map(({ manifest }) => {
+          const warnings = manifest.parsingErrors;
+          for (let i = 0; i < warnings.length; i++) {
+            warning$.next(warnings[i]); // TODO not through warning$
+          }
+          return { manifest, sendingTime };
+        })
+      );
+    },
   };
 }

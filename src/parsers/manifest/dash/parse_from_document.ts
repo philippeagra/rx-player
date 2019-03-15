@@ -28,7 +28,7 @@ export type IMPDParserResponse = IParserResponse<IParsedManifest>;
  */
 export default function parseFromDocument(
   document: Document,
-  uri : string
+  uri? : string
 ) : IMPDParserResponse {
   const root = document.documentElement;
   if (!root || root.nodeName !== "MPD") {
