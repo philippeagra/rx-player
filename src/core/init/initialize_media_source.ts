@@ -56,6 +56,7 @@ import {
 } from "../eme";
 import {
   createManifestPipeline,
+  IFetchManifestResult,
   IPipelineOptions,
   SegmentPipelinesManager,
 } from "../pipelines";
@@ -119,6 +120,7 @@ export interface IInitializeOptions {
   };
   clock$ : Observable<IInitClockTick>;
   keySystems : IKeySystemOption[];
+  initialManifest : string|Document|any; // XXX TODO
   mediaElement : HTMLMediaElement;
   networkConfig: {
     manifestRetry? : number;
@@ -129,7 +131,7 @@ export interface IInitializeOptions {
   startAt? : IInitialTimeOptions;
   textTrackOptions : ITextTrackSourceBufferOptions;
   pipelines : ITransportPipelines;
-  url : string;
+  url? : string;
 }
 
 // Every events emitted by Init.
@@ -162,6 +164,7 @@ export default function InitializeOnMediaSource({
   bufferOptions,
   clock$,
   keySystems,
+  initialManifest,
   mediaElement,
   networkConfig,
   speed$,
@@ -232,9 +235,18 @@ export default function InitializeOnMediaSource({
     take(1)
   );
 
+  const initialFetch$ : Observable<IFetchManifestResult> = (() => {
+    if (initialManifest != null) {
+      return manifestPipelines.parse({ responseData: initialManifest });
+    } else if (url == null) {
+      throw new MediaError(); // XXX TODO
+    }
+    return fetchManifest(url);
+  })();
+
   const loadContent$ = observableCombineLatest(
     openMediaSource$,
-    fetchManifest(url),
+    initialFetch$,
     emeInitialized$
   ).pipe(mergeMap(([ mediaSource, { manifest, sendingTime } ]) => {
 
