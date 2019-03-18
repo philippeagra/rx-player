@@ -181,13 +181,10 @@ export default function InitializeOnMediaSource({
 
   // Fetch and parse the manifest from the URL given.
   // Throttled to avoid doing multiple simultaneous requests.
-  const fetchManifest = throttle((
-    manifestURL : string,
-    manifestParserOptions : IManifestParserOptions
-  ) =>
-    manifestPipelines.fetch(manifestURL).pipe(
+  const fetchManifest = throttle((options : IManifestParserOptions) =>
+    manifestPipelines.fetch(options.url).pipe(
       mergeMap((response) =>
-        manifestPipelines.parse(response.value, manifestURL, manifestParserOptions)
+        manifestPipelines.parse(response.value, options)
       ),
       share()
     )
@@ -238,7 +235,7 @@ export default function InitializeOnMediaSource({
 
   const loadContent$ = observableCombineLatest(
     openMediaSource$,
-    fetchManifest(url, { loadExternalUTCTimings: true }),
+    fetchManifest({ url, hasClockSynchronization: false }),
     emeInitialized$
   ).pipe(mergeMap(([ mediaSource, { manifest, sendingTime } ]) => {
 
@@ -253,7 +250,7 @@ export default function InitializeOnMediaSource({
         return EMPTY;
       }
 
-      return fetchManifest(refreshURL, { loadExternalUTCTimings: false }).pipe(
+      return fetchManifest({ url: refreshURL, hasClockSynchronization: true }).pipe(
         tap(({ manifest: newManifest, sendingTime: newSendingTime }) => {
           manifest.update(newManifest);
           manifestRefreshed$.next({ manifest, sendingTime: newSendingTime });
