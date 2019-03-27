@@ -14,26 +14,14 @@
  * limitations under the License.
  */
 
-import BufferGarbageCollector from "./garbage_collector";
-import QueuedSourceBuffer, {
-  IAppendBufferInfos,
-  IBufferType,
-} from "./queued_source_buffer";
-import SourceBuffersManager, {
-  getBufferTypes,
-  IOverlaySourceBufferOptions,
-  ISourceBufferOptions,
-  ITextTrackSourceBufferOptions,
-} from "./source_buffers_manager";
+export interface ITimedData<T> {
+  start : number;
+  end : number;
+  data : T;
+}
 
-export default SourceBuffersManager;
-export {
-  BufferGarbageCollector,
-  getBufferTypes,
-  IAppendBufferInfos,
-  IBufferType,
-  IOverlaySourceBufferOptions,
-  ISourceBufferOptions,
-  ITextTrackSourceBufferOptions,
-  QueuedSourceBuffer,
-};
+export interface ITimedDataSegment<T> {
+  start : number;
+  end : number;
+  content : Array<ITimedData<T>>;
+}

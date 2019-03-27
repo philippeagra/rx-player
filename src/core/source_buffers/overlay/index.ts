@@ -28,12 +28,13 @@ import {
   switchMapTo,
   takeUntil,
 } from "rxjs/operators";
-import { events } from "../../../../compat";
-import config from "../../../../config";
-import log from "../../../../log";
-import AbstractSourceBuffer from "../../abstract_source_buffer";
-import TimedDataBufferManager from "../../buffer_manager";
-import parseTextTrackToElements from "./parsers";
+import { events } from "../../../compat";
+import config from "../../../config";
+import log from "../../../log";
+import { IOverlayTrackSegmentData } from "../../../transports/types";
+import AbstractSourceBuffer from "../abstract_source_buffer";
+import TimedDataBufferManager from "../buffer_manager";
+import parseOverlayToElements from "./parsers";
 
 const {
   onEnded$,
@@ -41,21 +42,12 @@ const {
   onSeeking$,
 } = events;
 
-export interface IHTMLTextTrackData {
-  timescale : number;
-  start : number;
-  end? : number;
-  data : string;
-  type : string;
-  language : string;
-}
-
 const {
-  MAXIMUM_HTML_TEXT_TRACK_UPDATE_INTERVAL,
+  MAXIMUM_OVERLAY_TRACK_UPDATE_INTERVAL,
 } = config;
 
 /**
- * Generate the clock at which TextTrack HTML Cues should be refreshed.
+ * Generate the clock at which the overlay should be checked for update.
  * @param {HTMLMediaElement} videoElement
  * @returns {Observable}
  */
@@ -65,15 +57,18 @@ function generateClock(videoElement : HTMLMediaElement) : Observable<boolean> {
   const ended$ = onEnded$(videoElement);
 
   const manualRefresh$ = observableMerge(seeked$, ended$);
-  const autoRefresh$ = observableInterval(MAXIMUM_HTML_TEXT_TRACK_UPDATE_INTERVAL)
+  const autoRefresh$ = observableInterval(MAXIMUM_OVERLAY_TRACK_UPDATE_INTERVAL)
     .pipe(startWith(null));
 
+  // TODO Better way to express that
   return manualRefresh$.pipe(
     startWith(null),
     switchMapTo(
       observableConcat(
-        autoRefresh$
-          .pipe(mapTo(true), takeUntil(seeking$)),
+        autoRefresh$.pipe(
+          mapTo(true),
+          takeUntil(seeking$)
+        ),
         observableOf(false)
       )
     )
@@ -89,47 +84,50 @@ function safelyRemoveChild(element : Element, child : Element|null) {
     try {
       element.removeChild(child);
     } catch (e) {
-      log.warn("HTSB: Can't remove text track: not in the element.");
+      log.warn("Can't remove overlay track: not in the element.");
     }
   }
 }
 
-/**
- * SourceBuffer to display TextTracks in the given HTML element.
- * @class HTMLTextSourceBuffer
- */
-export default class HTMLTextSourceBuffer
-  extends AbstractSourceBuffer<IHTMLTextTrackData>
-{
-  private readonly _videoElement : HTMLMediaElement;
-  private readonly _destroy$ : Subject<void>;
-  private readonly _textTrackElement : HTMLElement;
-  private readonly _buffer : TimedDataBufferManager<HTMLElement>;
+export interface IOverlayBufferElement {
+  start : number;
+  end : number;
+  element : HTMLElement;
+}
 
+/**
+ * Source buffer to display Overlays in the given HTML element.
+ * @class OverlayTrackSourceBuffer
+ */
+export default class OverlayTrackSourceBuffer
+  extends AbstractSourceBuffer<IOverlayTrackSegmentData>
+{
+  private _videoElement : HTMLMediaElement;
+  private _destroy$ : Subject<void>;
+  private _overlayTrackElement : HTMLElement;
+
+  private _buffer : TimedDataBufferManager<HTMLElement>;
   private _currentElement : HTMLElement|null;
 
   /**
    * @param {HTMLMediaElement} videoElement
-   * @param {HTMLElement} textTrackElement
+   * @param {HTMLElement} overlayTrackElement
    */
   constructor(
     videoElement : HTMLMediaElement,
-    textTrackElement : HTMLElement
+    overlayTrackElement : HTMLElement
   ) {
-    log.debug("HTSB: Creating html text track SourceBuffer");
+    log.debug("creating overlay track source buffer");
     super();
     this._videoElement = videoElement;
-    this._textTrackElement = textTrackElement;
+    this._overlayTrackElement = overlayTrackElement;
     this._destroy$ = new Subject();
-    this._buffer = new TimedDataBufferManager();
+    this._buffer = new TimedDataBufferManager<HTMLElement>();
     this._currentElement = null;
 
-    generateClock(this._videoElement)
-      .pipe(takeUntil(this._destroy$))
+    generateClock(this._videoElement).pipe(takeUntil(this._destroy$))
       .subscribe((shouldDisplay) => {
         if (!shouldDisplay) {
-          safelyRemoveChild(textTrackElement, this._currentElement);
-          this._currentElement = null;
           return;
         }
 
@@ -137,39 +135,39 @@ export default class HTMLTextSourceBuffer
         // As the clock is also based on real video events, we cannot just
         // divide by two the regular interval.
         const time = Math.max(this._videoElement.currentTime -
-          MAXIMUM_HTML_TEXT_TRACK_UPDATE_INTERVAL / 2000, 0);
-        const cue = this._buffer.get(time);
-        if (!cue) {
-          safelyRemoveChild(textTrackElement, this._currentElement);
+          MAXIMUM_OVERLAY_TRACK_UPDATE_INTERVAL / 3000, 0);
+        const overlay = this._buffer.get(time);
+        if (!overlay) {
+          safelyRemoveChild(overlayTrackElement, this._currentElement);
           this._currentElement = null;
           return;
-        } else if (this._currentElement === cue.data) {
+        } else if (this._currentElement === overlay.data) {
           return;
         }
-        safelyRemoveChild(textTrackElement, this._currentElement);
-        this._currentElement = cue.data;
-        textTrackElement.appendChild(this._currentElement);
+        safelyRemoveChild(overlayTrackElement, this._currentElement);
+        this._currentElement = overlay.data;
+        overlayTrackElement.appendChild(this._currentElement);
       });
   }
 
   /**
-   * Append text tracks.
+   * Append overlay data.
    * @param {Object} data
    */
-  _append(data : IHTMLTextTrackData) : void {
-    log.debug("HTSB: Appending new html text tracks", data);
+  _append(data : IOverlayTrackSegmentData) : void {
+    log.debug("appending new overlay data", data);
     const {
-      timescale, // timescale for the start and end
-      start: timescaledStart, // exact beginning to which the track applies
-      end: timescaledEnd, // exact end to which the track applies
-      data: dataString, // text track content. Should be a string
-      type, // type of texttracks (e.g. "ttml" or "vtt")
-      language, // language the texttrack is in
+      timescale,
+      start: timescaledStart,
+      end: timescaledEnd,
+      data: overlayData,
+      type,
+      timeOffset,
     } = data;
     if (timescaledEnd && timescaledEnd - timescaledStart <= 0) {
       // this is accepted for error resilience, just skip that case.
       /* tslint:disable:max-line-length */
-      log.warn("HTSB: Invalid text track appended: the start time is inferior or equal to the end time.");
+      log.warn("Invalid overlay data appended: the start time is inferior or equal to the end time.");
       /* tslint:enable:max-line-length */
       return;
     }
@@ -178,13 +176,16 @@ export default class HTMLTextSourceBuffer
     const endTime = timescaledEnd != null ?
       timescaledEnd / timescale : undefined;
 
-    const cues = parseTextTrackToElements(
-      type, dataString, this.timestampOffset, language);
+    const overlays = parseOverlayToElements(type, overlayData, timeOffset);
     const start = startTime;
-    const end = endTime != null ? endTime : cues[cues.length - 1].end;
+    const end = endTime != null ? endTime : overlays[overlays.length - 1].end;
 
-    const formattedData = cues.map((cue) =>
-      ({ start: cue.start, end: cue.end, data: cue.element, }));
+    // TODO define "element" as "data" from the beginning?
+    const formattedData = overlays.map((cue) => ({
+      start: cue.start,
+      end: cue.end,
+      data: cue.element,
+    }));
     this._buffer.insert(formattedData, start, end);
     this.buffered.insert(start, end);
   }
@@ -194,7 +195,7 @@ export default class HTMLTextSourceBuffer
    * @param {Number} to
    */
   _remove(from : number, to : number) : void {
-    log.debug("HTSB: Removing html text track data", from, to);
+    log.debug("removing overlay data", from, to);
     this._buffer.remove(from, to);
     this.buffered.remove(from, to);
   }
@@ -203,10 +204,9 @@ export default class HTMLTextSourceBuffer
    * Free up ressources from this sourceBuffer
    */
   _abort() : void {
-    log.debug("HTSB: Aborting html text track SourceBuffer");
-    this._remove(0, Infinity);
+    log.debug("aborting overlay source buffer");
     this._destroy$.next();
     this._destroy$.complete();
-    safelyRemoveChild(this._textTrackElement, this._currentElement);
+    safelyRemoveChild(this._overlayTrackElement, this._currentElement);
   }
 }

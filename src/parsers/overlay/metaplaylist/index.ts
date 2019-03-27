@@ -14,14 +14,5 @@
  * limitations under the License.
  */
 
-export interface IHTMLCue {
-  start : number;
-  end : number;
-  element : HTMLElement;
-}
-
-export interface ICuesGroup {
-  start : number;
-  end : number;
-  cues : IHTMLCue[];
-}
+import createMetaPlaylistOverlays from "./create_mpl_overlays";
+export default createMetaPlaylistOverlays;
