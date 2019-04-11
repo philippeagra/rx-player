@@ -314,7 +314,7 @@ export default function RepresentationBuffer<T>({
                 currentQuality ? currentQuality.infos.representation : null;
               /* tslint:disable no-console */
               console.log(
-                "!!! Tests G9Mini - Current played quality",
+                "!!! Tests G9Mini RxPlayer - Current played quality",
                 "width: " + (_r ? _r.width : undefined),
                 "height: " + (_r ? _r.height : undefined),
                 currentTime
