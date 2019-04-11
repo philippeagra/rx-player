@@ -66,6 +66,7 @@ import {
   IRepresentationBufferEvent,
   IRepresentationBufferStateEvent,
 } from "./types";
+import arrayFind from "array-find";
 
 interface IBufferStateIdle {
   type : "idle-buffer";
@@ -302,6 +303,25 @@ export default function RepresentationBuffer<T>({
             time / timescale, // start
             duration != null ? (time + duration) / timescale : undefined // end
           );
+          if (content.adaptation.type === "video") {
+            const vidEl_ = document.querySelector("video");
+            const currentTime = vidEl_ ? vidEl_.currentTime : null;
+            if (currentTime) {
+              const currentQuality = arrayFind(segmentBookkeeper.inventory, (e) => {
+                return e.start <= currentTime && e.end > currentTime;
+              });
+              const _r =
+                currentQuality ? currentQuality.infos.representation : null;
+              /* tslint:disable no-console */
+              console.log(
+                "!!! Tests G9Mini - Current played quality",
+                "width: " + (_r ? _r.width : undefined),
+                "height: " + (_r ? _r.height : undefined),
+                currentTime
+              );
+              /* tslint:disable no-console */
+            }
+          }
         }),
         finalize(() => { // remove from queue
           sourceBufferWaitingQueue.remove(segment.id);
