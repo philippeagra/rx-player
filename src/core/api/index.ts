@@ -1517,6 +1517,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} depthInSeconds
    */
   setMaxBufferBehind(depthInSeconds : number) : void {
+    console.log("!!! G9Mini - setMaxBufferBehind", depthInSeconds);
     this._priv_bufferOptions.maxBufferBehind$.next(depthInSeconds);
   }
 
@@ -1526,6 +1527,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} depthInSeconds
    */
   setMaxBufferAhead(depthInSeconds : number) : void {
+    console.log("!!! G9Mini - setMaxBufferAhead", depthInSeconds);
     this._priv_bufferOptions.maxBufferAhead$.next(depthInSeconds);
   }
 
@@ -1535,6 +1537,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} sizeInSeconds
    */
   setWantedBufferAhead(sizeInSeconds : number) : void {
+    console.log("!!! G9Mini - setWantedBufferAhead", sizeInSeconds);
     this._priv_bufferOptions.wantedBufferAhead$.next(sizeInSeconds);
   }
 
