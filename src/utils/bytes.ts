@@ -49,7 +49,7 @@ function strToBytes(str : string) : Uint8Array {
  * @returns {string}
  */
 function bytesToStr(bytes : Uint8Array) : string {
-  return String.fromCharCode.apply(null, bytes);
+  return String.fromCharCode.apply(null, bytes as any);
 }
 
 /**

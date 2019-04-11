@@ -40,7 +40,7 @@ interface IObservableLike<T> {
 function castToObservable<T>(
   value : Observable<T>|IObservableLike<T>|Promise<T>) : Observable<T>;
 function castToObservable<T>(value? : T) : Observable<T>;
-function castToObservable<T>(value? : any) : Observable<T> {
+function castToObservable<T>(value? : any) : Observable<any> {
   if (value instanceof Observable) {
     return value;
   }

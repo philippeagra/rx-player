@@ -115,7 +115,7 @@ export default function AdaptationBuffer<T>(
     // equivalent to a sane shareReplay:
     // https://github.com/ReactiveX/rxjs/issues/3336
     // TODO Replace it when that issue is resolved
-    multicast(() => new ReplaySubject(1)),
+    multicast(() => new ReplaySubject<any>(1)),
     refCount()
   );
 

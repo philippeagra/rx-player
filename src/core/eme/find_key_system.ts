@@ -255,7 +255,7 @@ export default function getMediaKeySystemAccess(
   mediaElement : HTMLMediaElement,
   keySystemsConfigs: IKeySystemOption[],
   currentMediaKeysInfos: MediaKeysInfosStore
-) : Observable<IFoundMediaKeySystemAccessEvent> {
+) : Observable<any> {
   return observableDefer(() => {
     const currentState = currentMediaKeysInfos.getState(mediaElement);
     if (currentState) {

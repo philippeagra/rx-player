@@ -45,7 +45,7 @@ import log from "../../log";
 function doInitialSeek(
   mediaElement : HTMLMediaElement,
   startTime : number|(() => number)
-) : Observable<void> {
+) : Observable<any> {
   return hasLoadedMetadata(mediaElement)
     .pipe(
       tap(() => {
@@ -61,7 +61,7 @@ function doInitialSeek(
       // equivalent to a sane shareReplay:
       // https://github.com/ReactiveX/rxjs/issues/3336
       // TODO Replace it when that issue is resolved
-      multicast(() => new ReplaySubject(1)),
+      multicast(() => new ReplaySubject<any>(1)),
       refCount()
     );
 }
@@ -93,7 +93,7 @@ export default function seekAndLoadOnMediaEvents(
 } {
   const seek$ = doInitialSeek(mediaElement, startTime);
 
-  const load$ = canPlay(mediaElement).pipe(
+  const load$: any = canPlay(mediaElement).pipe(
 
     tap(() => log.info("canplay event")),
 

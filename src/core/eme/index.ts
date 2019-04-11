@@ -93,7 +93,7 @@ export type IEMEManagerEvent =
 export default function EMEManager(
   mediaElement : HTMLMediaElement,
   keySystemsConfigs: IKeySystemOption[]
-) : Observable<IEMEManagerEvent> {
+) : Observable<any> {
   if (__DEV__) {
     keySystemsConfigs.forEach((config) => assertInterface(config, {
       getLicense: "function",
@@ -151,7 +151,7 @@ export default function EMEManager(
     }),
 
     /* Trigger license request and manage MediaKeySession events */
-    mergeMap((sessionInfosEvt) =>  {
+    mergeMap((sessionInfosEvt: any) =>  {
       if (sessionInfosEvt.type === "warning") {
         return observableOf(sessionInfosEvt);
       }

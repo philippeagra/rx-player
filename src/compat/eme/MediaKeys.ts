@@ -173,7 +173,7 @@ if (navigator.requestMediaKeySystemAccess) {
     ) : Promise<void> {
       return new Promise((resolve, reject) => {
         try {
-          memUpdate.call(this, license, sessionId);
+          memUpdate.call(this, license as any, sessionId as any);
           resolve();
         } catch (e) {
           reject(e);

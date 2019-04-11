@@ -514,7 +514,7 @@ export default function PeriodBufferManager(
 
       const newBuffer$ = clock$.pipe(
         take(1),
-        mergeMap<IPeriodBufferManagerClockTick, IPeriodBufferEvent>((tick) => {
+        mergeMap<any, any>((tick) => {
           const qSourceBuffer = createOrReuseQueuedSourceBuffer(bufferType, adaptation);
           const strategy = getAdaptationSwitchStrategy(
             qSourceBuffer.getBuffered(), period, bufferType, tick);

@@ -569,7 +569,7 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
     this._priv_playing$ = new ReplaySubject(1);
     this._priv_speed$ = new BehaviorSubject(videoElement.playbackRate);
     this._priv_stopCurrentContent$ = new Subject();
-    this._priv_streamLock$ = new BehaviorSubject(false);
+    this._priv_streamLock$ = new BehaviorSubject<boolean>(false);
 
     this._priv_bufferOptions = {
       wantedBufferAhead$: new BehaviorSubject(wantedBufferAhead),
