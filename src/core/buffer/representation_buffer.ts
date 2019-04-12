@@ -314,10 +314,10 @@ export default function RepresentationBuffer<T>({
                 currentQuality ? currentQuality.infos.representation : null;
               /* tslint:disable no-console */
               console.log(
-                "!!! Tests G9Mini RxPlayer - Current played quality",
-                "width: " + (_r ? _r.width : undefined),
-                "height: " + (_r ? _r.height : undefined),
-                currentTime
+                "!!! tests G9Mini RxPlayer - Current played quality",
+                "video width: " + (_r ? _r.width : undefined),
+                "video height: " + (_r ? _r.height : undefined),
+                "Position: " + currentTime
               );
               /* tslint:disable no-console */
             }
