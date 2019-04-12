@@ -351,6 +351,16 @@ export default function RepresentationBuffer<T>({
         );
         /* tslint:disable no-console */
       }
+      const _b = segmentBookkeeper.inventory
+        .filter((i) => i.bufferedEnd != null && i.bufferedStart != null)
+        .reduce((acc: { segments: any[]; duration: number }, i) => {
+          const duration = (i.bufferedEnd as number) - (i.bufferedStart as number);
+          const segment = { start: i.bufferedStart, end: i.bufferedEnd };
+          acc.duration += duration;
+          acc.segments.push(segment);
+          return acc;
+        }, { segments: [], duration: 0 });
+      console.log("!!! tests G9mini RxPlayer - Buffered (js)", _b);
     }
 
     let neededSegments = getSegmentsNeeded(representation, neededRange)
