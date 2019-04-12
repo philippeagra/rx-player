@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import arrayFind from "array-find";
 import objectAssign from "object-assign";
 import {
   combineLatest as observableCombineLatest,
@@ -66,7 +67,6 @@ import {
   IRepresentationBufferEvent,
   IRepresentationBufferStateEvent,
 } from "./types";
-import arrayFind from "array-find";
 
 interface IBufferStateIdle {
   type : "idle-buffer";
@@ -192,6 +192,7 @@ export default function RepresentationBuffer<T>({
   wantedBufferAhead$, // emit the buffer goal
 } : IRepresentationBufferArguments<T>) : Observable<IRepresentationBufferEvent<T>> {
   // unwrap components of the content
+  const vidEl_ = document.querySelector("video");
   const { period, adaptation, representation } = content;
   const bufferType = adaptation.type;
   const initSegment = representation.index.getInitSegment();
@@ -304,7 +305,6 @@ export default function RepresentationBuffer<T>({
             duration != null ? (time + duration) / timescale : undefined // end
           );
           if (content.adaptation.type === "video") {
-            const vidEl_ = document.querySelector("video");
             const currentTime = vidEl_ ? vidEl_.currentTime : null;
             if (currentTime) {
               const currentQuality = arrayFind(segmentBookkeeper.inventory, (e) => {
