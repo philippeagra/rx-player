@@ -304,24 +304,6 @@ export default function RepresentationBuffer<T>({
             time / timescale, // start
             duration != null ? (time + duration) / timescale : undefined // end
           );
-          if (content.adaptation.type === "video") {
-            const currentTime = vidEl_ ? vidEl_.currentTime : null;
-            if (currentTime) {
-              const currentQuality = arrayFind(segmentBookkeeper.inventory, (e) => {
-                return e.start <= currentTime && e.end > currentTime;
-              });
-              const _r =
-                currentQuality ? currentQuality.infos.representation : null;
-              /* tslint:disable no-console */
-              console.log(
-                "!!! tests G9Mini RxPlayer - Current played quality",
-                "video width: " + (_r ? _r.width : undefined),
-                "video height: " + (_r ? _r.height : undefined),
-                "Position: " + currentTime
-              );
-              /* tslint:disable no-console */
-            }
-          }
         }),
         finalize(() => { // remove from queue
           sourceBufferWaitingQueue.remove(segment.id);
@@ -352,6 +334,24 @@ export default function RepresentationBuffer<T>({
 
     // /!\ Side effect to the SegmentBookkeeper
     segmentBookkeeper.synchronizeBuffered(buffered);
+    if (content.adaptation.type === "video") {
+      const currentTime = vidEl_ ? vidEl_.currentTime : null;
+      if (currentTime) {
+        const currentQuality = arrayFind(segmentBookkeeper.inventory, (e) => {
+          return e.start <= currentTime && e.end > currentTime;
+        });
+        const _r =
+          currentQuality ? currentQuality.infos.representation : null;
+        /* tslint:disable no-console */
+        console.log(
+          "!!! tests G9Mini RxPlayer - Current played quality",
+          "video width: " + (_r ? _r.width : undefined),
+          "video height: " + (_r ? _r.height : undefined),
+          "Position: " + currentTime
+        );
+        /* tslint:disable no-console */
+      }
+    }
 
     let neededSegments = getSegmentsNeeded(representation, neededRange)
       .filter((segment) => {
