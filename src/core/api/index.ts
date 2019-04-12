@@ -1517,7 +1517,9 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} depthInSeconds
    */
   setMaxBufferBehind(depthInSeconds : number) : void {
+    /* tslint:disable */
     console.log("!!! Tests G9Mini RxPlayer - setMaxBufferBehind", depthInSeconds);
+    /* tslint:enable */
     this._priv_bufferOptions.maxBufferBehind$.next(depthInSeconds);
   }
 
@@ -1527,7 +1529,9 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} depthInSeconds
    */
   setMaxBufferAhead(depthInSeconds : number) : void {
+    /* tslint:disable */
     console.log("!!! Tests G9Mini RxPlayer - setMaxBufferAhead", depthInSeconds);
+    /* tslint:enable */
     this._priv_bufferOptions.maxBufferAhead$.next(depthInSeconds);
   }
 
@@ -1537,7 +1541,9 @@ class Player extends EventEmitter<PLAYER_EVENT_STRINGS, any> {
    * @param {Number} sizeInSeconds
    */
   setWantedBufferAhead(sizeInSeconds : number) : void {
+    /* tslint:disable */
     console.log("!!! Tests G9Mini RxPlayer - setWantedBufferAhead", sizeInSeconds);
+    /* tslint:enable */
     this._priv_bufferOptions.wantedBufferAhead$.next(sizeInSeconds);
   }
 
