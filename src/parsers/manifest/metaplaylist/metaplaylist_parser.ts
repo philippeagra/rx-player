@@ -105,9 +105,7 @@ export default function parseMetaPlaylist(
   if (contents == null || contents.length === 0) {
     throw new Error("MPL Parser: No content found.");
   }
-  if (parsedData.attributes == null) {
-    throw new Error("MPL Parser: Malformed playlist.");
-  }
+
   const ressources : Array<{ url : string; transportType : string }> = [];
   for (let i = 0; i < contents.length; i++) {
     const content = contents[i];
