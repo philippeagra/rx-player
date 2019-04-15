@@ -27,7 +27,6 @@ import {
   Observable
 } from "rxjs";
 import {
-  distinctUntilChanged,
   map,
   tap,
 } from "rxjs/operators";
@@ -49,6 +48,11 @@ export interface IPeriodBufferInfos {
 interface IPeriodItem {
   period: Period;
   buffers: Set<IBufferType>;
+}
+
+interface IPeriodState {
+  activePeriod: Period|null;
+  currentBufferedPeriods: IPeriodItem[];
 }
 
 /**
@@ -88,11 +92,11 @@ interface IPeriodItem {
  * one is removed.
  * @returns {Observable}
  */
-export default function ActivePeriodEmitter(
+export default function PeriodStateEmitter(
   bufferTypes: IBufferType[],
   addPeriodBuffer$ : Observable<IPeriodBufferInfos>,
   removePeriodBuffer$ : Observable<IPeriodBufferInfos>
-) : Observable<Period|null> {
+) : Observable<IPeriodState> {
   const periodsList : SortedList<IPeriodItem> =
     new SortedList((a, b) => a.period.start - b.period.start);
 
@@ -135,18 +139,29 @@ export default function ActivePeriodEmitter(
     }));
 
   return observableMerge(onItemAdd$, onItemRemove$).pipe(
-    map(() : Period|null => {
+    map(() : IPeriodState => {
       const head = periodsList.head();
       if (!head) {
-        return null;
+        return {
+          activePeriod: null,
+          currentBufferedPeriods: [],
+        };
       }
 
       const periodItem = periodsList.findFirst(p =>
         isBufferListFull(bufferTypes, p.buffers)
       );
-      return periodItem != null ? periodItem.period : null;
-    }),
-    distinctUntilChanged()
+      const period = periodItem != null ? periodItem.period : null;
+      /* tslint:disable no-unbound-method */
+      const currentBufferedPeriods = new Array(periodsList.length).map((_, i) => {
+        return periodsList.get(i);
+      });
+      /* tslint:enable no-unbound-method */
+      return {
+        activePeriod: period,
+        currentBufferedPeriods,
+      };
+    })
   );
 }
 

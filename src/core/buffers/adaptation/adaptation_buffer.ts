@@ -39,9 +39,13 @@ import {
   filter,
   ignoreElements,
   map,
+  mapTo,
   observeOn,
   share,
+  startWith,
   takeUntil,
+  tap,
+  withLatestFrom,
 } from "rxjs/operators";
 import log from "../../../log";
 import Manifest, {
@@ -49,6 +53,7 @@ import Manifest, {
   Period,
   Representation,
 } from "../../../manifest";
+import arrayFind from "../../../utils/array_find";
 import concatMapLatest from "../../../utils/concat_map_latest";
 import ABRManager, {
   IABREstimation,
@@ -110,7 +115,8 @@ export default function AdaptationBuffer<T>(
     period : Period; adaptation : Adaptation;
   },
   abrManager : ABRManager,
-  options : { manualBitrateSwitchingMode : "seamless"|"direct" }
+  options : { manualBitrateSwitchingMode : "seamless"|"direct" },
+  mandatoryTracks$: Observable<Adaptation[]>
 ) : Observable<IAdaptationBufferEvent<T>> {
   const directManualBitrateSwitching = options.manualBitrateSwitchingMode === "direct";
   const { manifest, period, adaptation } = content;
@@ -185,7 +191,37 @@ export default function AdaptationBuffer<T>(
     }), ignoreElements())
   );
 
-  return observableMerge(adaptationBuffer$, bitrateEstimate$);
+  const activeBuffer$ = adaptationBuffer$.pipe(
+    filter((evt) => evt.type === "active-buffer"),
+    mapTo(true)
+  );
+
+  const blockContent$: Observable<never> = clock$.pipe(
+    withLatestFrom(mandatoryTracks$, activeBuffer$),
+    filter(([_, mandatoryTracks]) => {
+      const mandatoryTrack = arrayFind(mandatoryTracks, (mt) => {
+        return mt.id === adaptation.id;
+      });
+      return !!mandatoryTrack;
+    }),
+    tap(([clock, _, activeBuffer]) => {
+      const start = clock.currentTime;
+      const end = clock.currentTime + 1;
+      const hasPlayableSegment = segmentBookkeeper.hasPlayableSegment({ start, end });
+      const segments = currentRepresentation ?
+      currentRepresentation.index.getSegments(start, end) : [];
+      // XXX TODO
+      if (segments.length && !hasPlayableSegment && !activeBuffer) {
+        const error = new Error();
+        error.name = "ContentError";
+        error.message = "No mandatory content";
+        throw error;
+      }
+    }),
+    ignoreElements()
+  );
+
+  return observableMerge(blockContent$, adaptationBuffer$, bitrateEstimate$);
 
   /**
    * Create and returns a new RepresentationBuffer Observable, linked to the

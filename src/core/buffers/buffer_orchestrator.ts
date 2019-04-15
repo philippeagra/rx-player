@@ -23,20 +23,24 @@ import {
   Subject,
 } from "rxjs";
 import {
+  distinctUntilChanged,
   exhaustMap,
   filter,
   ignoreElements,
   map,
   mergeMap,
   share,
+  shareReplay,
   take,
   takeUntil,
   tap,
+  withLatestFrom,
 } from "rxjs/operators";
 import config from "../../config";
 import { MediaError } from "../../errors";
 import log from "../../log";
 import Manifest, {
+  Adaptation,
   Period,
 } from "../../manifest";
 import SortedList from "../../utils/sorted_list";
@@ -51,14 +55,14 @@ import SourceBuffersManager, {
   ITextTrackSourceBufferOptions,
   QueuedSourceBuffer,
 } from "../source_buffers";
-import ActivePeriodEmitter, {
-  IPeriodBufferInfos,
-} from "./active_period_emitter";
 import areBuffersComplete from "./are_buffers_complete";
 import EVENTS from "./events_generators";
 import PeriodBuffer, {
   IPeriodBufferClockTick,
 } from "./period";
+import PeriodStateEmitter, {
+  IPeriodBufferInfos,
+} from "./period_state_emitter";
 import SegmentBookkeeper from "./segment_bookkeeper";
 import {
   IBufferOrchestratorEvent,
@@ -171,6 +175,64 @@ export default function BufferOrchestrator(
   const removePeriodBuffer$ = new Subject<IPeriodBufferInfos>();
   const bufferTypes = getBufferTypes();
 
+    // Emit each active period state and currently buffered periods
+  const periodsState$ =
+    PeriodStateEmitter(bufferTypes, addPeriodBuffer$, removePeriodBuffer$)
+      .pipe(share());
+
+  const mandatoryTracks$: Observable<Adaptation[]> = clock$.pipe(
+    withLatestFrom(periodsState$),
+    map(([clock, periodsState]) => {
+      const periodsToWatch = periodsState.currentBufferedPeriods
+        .filter(({ period }) => {
+          const startOfWarnZone = period.start - (clock.speed * 5);
+          const endOfWarnZone = period.end ||
+            (period.duration ? period.start + period.duration : undefined);
+
+          if (endOfWarnZone == null) {
+            log.warn("Buffers: LOL XXX TODO");
+          }
+
+          return (
+            endOfWarnZone == null ||
+            clock.currentTime >= startOfWarnZone &&
+            clock.currentTime < endOfWarnZone
+          );
+        });
+      const mandatoryTracks = [];
+      for (let i = 0; i < periodsToWatch.length; i++) {
+        const periodToWatch = periodsToWatch[i];
+        const foundAdaptations = bufferTypes.reduce((acc: any[], bufferType) => {
+          const adaptations = periodToWatch.period.adaptations[bufferType];
+          const mandatoryAdaptations = adaptations ? adaptations.filter((a) => {
+            return a.isMandatory;
+          }) : [];
+          if (mandatoryAdaptations.length) {
+            acc.push(...mandatoryAdaptations);
+          }
+          return acc;
+        }, []);
+        if (foundAdaptations.length) {
+          mandatoryTracks.push(...foundAdaptations);
+          break;
+        }
+      }
+
+      return mandatoryTracks;
+    }),
+    distinctUntilChanged((o, n) => {
+      const old_ids = o.map(({ id }) => id).join();
+      const new_ids = n.map(({ id }) => id).join();
+      return old_ids === new_ids;
+    }),
+    tap((mts) => {
+      /* tslint:disable no-console */
+      console.log("!!! Mandatory Tracks", mts);
+      /* tslint:enable no-console */
+    }),
+    shareReplay()
+  );
+
   // Every PeriodBuffers for every possible types
   const buffersArray = bufferTypes.map((bufferType) => {
     return manageEveryBuffers(bufferType, initialPeriod).pipe(
@@ -186,14 +248,14 @@ export default function BufferOrchestrator(
   });
 
   // Emits the activePeriodChanged events every time the active Period changes.
-  const activePeriodChanged$ =
-    ActivePeriodEmitter(bufferTypes, addPeriodBuffer$, removePeriodBuffer$).pipe(
-      filter((period) : period is Period => !!period),
-      map(period => {
-        log.info("Buffer: New active period", period);
-        return EVENTS.activePeriodChanged(period);
-      })
-    );
+  const activePeriodChanged$ = periodsState$.pipe(
+    map(({ activePeriod }) => activePeriod),
+    filter((period) : period is Period => !!period),
+    map(period => {
+      log.info("Buffer: New active period", period);
+      return EVENTS.activePeriodChanged(period);
+    })
+  );
 
   // Emits an "end-of-stream" event once every PeriodBuffer are complete.
   // Emits a 'resume-stream" when it's not
@@ -380,6 +442,7 @@ export default function BufferOrchestrator(
       segmentPipelinesManager,
       sourceBuffersManager,
       options,
+      mandatoryTracks$,
     }).pipe(
       mergeMap((
         evt : IPeriodBufferEvent

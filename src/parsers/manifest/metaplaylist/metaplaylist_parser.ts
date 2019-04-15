@@ -19,6 +19,7 @@ import Manifest, {
   StaticRepresentationIndex,
   SUPPORTED_ADAPTATIONS_TYPE,
 } from "../../../manifest";
+import arrayFind from "../../../utils/array_find";
 import idGenerator from "../../../utils/id_generator";
 import {
   IParsedAdaptation,
@@ -61,6 +62,11 @@ export interface IMetaPlaylistOverlay {
     yAxis : string;
     height : string;
     width : string;
+    privateInfos: {
+      hash?: string;
+      hashType?: "md5";
+      isMandatory?: boolean;
+    };
   }>;
 }
 
@@ -271,7 +277,13 @@ function createManifest(
         period.end != null ? period.end :
         period.duration != null ? period.start + period.duration :
         undefined;
+      const isMandatory = !!arrayFind(overlays, (o) => {
+        return !!arrayFind(o.elements, (e) => {
+          return !!e.privateInfos.isMandatory;
+        });
+      });
       period.adaptations.overlay = [{
+        isMandatory,
         id: formatId(period.id) + "_" + "ada_ov",
         type: "overlay",
         representations: [{

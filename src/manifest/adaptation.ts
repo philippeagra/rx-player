@@ -120,6 +120,11 @@ export default class Adaptation {
   public readonly parsingErrors : Array<Error|ICustomError>;
 
   /**
+   * Boolean that tells if adaptation is mandatory for content playback.
+   */
+  public isMandatory : boolean;
+
+  /**
    * @constructor
    * @param {Object} parsedAdaptation
    * @param {Object|undefined} [options]
@@ -131,6 +136,7 @@ export default class Adaptation {
     const { representationFilter, isManuallyAdded } = options;
     this.parsingErrors = [];
     this.id = parsedAdaptation.id;
+    this.isMandatory = !!parsedAdaptation.isMandatory;
 
     if (!isSupportedAdaptationType(parsedAdaptation.type)) {
       log.info("Manifest: Not supported adaptation type", parsedAdaptation.type);

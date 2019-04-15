@@ -1,0 +1,29 @@
+{
+  "version": "0",
+  "dynamic": false,
+  "overlays": [{
+    "start": 60,
+    "end": 100,
+    "timescale": 1,
+    "version": 0,
+    "elements": [{
+      "url": "http://127.0.0.1:8081/tf1.png",
+      "format": "png",
+      "xAxis": "85%",
+      "yAxis": "1%",
+      "width": "100px",
+      "privateInfos": {
+        "hash": "d4f9f392c83d620a0cd252cdea4b0f1d",
+        "hashType": "md5",
+        "isMandatory": true
+      }
+    }]
+  }],
+  "contents": [{
+    "url": "https://www.bok.net/dash/tears_of_steel/cleartext/stream.mpd",
+    "startTime": 0, 
+    "endTime": 734,
+    "transport": "dash",
+    "textTracks": []
+  }]
+}

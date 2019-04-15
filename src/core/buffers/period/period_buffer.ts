@@ -25,6 +25,7 @@ import {
 } from "rxjs";
 import {
   catchError,
+  filter,
   ignoreElements,
   map,
   mapTo,
@@ -32,6 +33,8 @@ import {
   startWith,
   switchMap,
   take,
+  tap,
+  withLatestFrom,
 } from "rxjs/operators";
 import config from "../../../config";
 import log from "../../../log";
@@ -39,6 +42,7 @@ import Manifest, {
   Adaptation,
   Period,
 } from "../../../manifest";
+import arrayFind from "../../../utils/array_find";
 import arrayIncludes from "../../../utils/array_includes";
 import InitializationSegmentCache from "../../../utils/initialization_segment_cache";
 import { getLeftSizeOfRange } from "../../../utils/ranges";
@@ -103,6 +107,7 @@ export interface IPeriodBufferArguments {
     textTrackOptions? : ITextTrackSourceBufferOptions;
     wantedBufferAhead$ : Observable<number>;
   };
+  mandatoryTracks$: Observable<Adaptation[]>;
 }
 
 /**
@@ -124,6 +129,7 @@ export default function PeriodBuffer({
   segmentPipelinesManager,
   sourceBuffersManager,
   options,
+  mandatoryTracks$,
 } : IPeriodBufferArguments) : Observable<IPeriodBufferEvent> {
   const { period } = content;
   const { wantedBufferAhead$ } = options;
@@ -212,30 +218,37 @@ export default function PeriodBuffer({
         bufferGap: getLeftSizeOfRange(buffered, tick.currentTime),
       });
     }));
+
     return AdaptationBuffer(
-      adaptationBufferClock$,
-      qSourceBuffer,
-      segmentBookkeeper,
-      pipeline,
-      wantedBufferAhead$,
-      { manifest, period, adaptation },
-      abrManager,
-      options
-    ).pipe(catchError((error : Error) => {
-      // non native buffer should not impact the stability of the
-      // player. ie: if a text buffer sends an error, we want to
-      // continue playing without any subtitles
-      if (!SourceBuffersManager.isNative(bufferType)) {
-        log.error(`Buffer: Custom ${bufferType} buffer crashed. Aborting it.`, error);
-        sourceBuffersManager.disposeSourceBuffer(bufferType);
-        return observableConcat<IAdaptationBufferEvent<T>|IBufferWarningEvent>(
-          observableOf(EVENTS.warning(error)),
-          createFakeBuffer(clock$, wantedBufferAhead$, bufferType, { period })
-        );
-      }
-      log.error(`Buffer: Native ${bufferType} buffer crashed. Stopping playback.`, error);
-      throw error;
-    }));
+        adaptationBufferClock$,
+        qSourceBuffer,
+        segmentBookkeeper,
+        pipeline,
+        wantedBufferAhead$,
+        { manifest, period, adaptation },
+        abrManager,
+        options,
+        mandatoryTracks$
+      ).pipe(catchError((error : Error) => {
+        if (error.name === "ContentError") {
+          throw error;
+        }
+        // non native buffer should not impact the stability of the
+        // player. ie: if a text buffer sends an error, we want to
+        // continue playing without any subtitles
+        if (!SourceBuffersManager.isNative(bufferType)) {
+          log.error(`Buffer: Custom ${bufferType} buffer crashed. Aborting it.`, error);
+          sourceBuffersManager.disposeSourceBuffer(bufferType);
+          return observableConcat<IAdaptationBufferEvent<T>|IBufferWarningEvent>(
+            observableOf(EVENTS.warning(error)),
+            createFakeBuffer(clock$, wantedBufferAhead$, bufferType, { period })
+          );
+        }
+        log.error(
+          `Buffer: Native ${bufferType} buffer crashed. Stopping playback.`, error);
+        throw error;
+      })
+    );
   }
 }
 

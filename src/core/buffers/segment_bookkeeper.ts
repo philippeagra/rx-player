@@ -486,17 +486,12 @@ export default class SegmentBookkeeper {
       start : number;
       end : number;
     },
-    segmentInfos : {
+    segmentInfos? : {
       time : number;
       duration : number;
       timescale : number;
     }
   ) : IBufferedSegment|null {
-    const {
-      time,
-      duration,
-      timescale,
-    } = segmentInfos;
     const { inventory } = this;
 
     for (let i = inventory.length - 1; i >= 0; i--) {
@@ -506,12 +501,13 @@ export default class SegmentBookkeeper {
 
       const segment = currentSegmentI.infos.segment;
 
-      let _time = time;
-      let _duration = duration;
-      if (segment.timescale !== timescale) {
+      let _time = segmentInfos ? segmentInfos.time : wantedRange.start;
+      let _duration = segmentInfos ?
+        segmentInfos.duration : (wantedRange.end - wantedRange.start);
+      if (segmentInfos && segment.timescale !== segmentInfos.timescale) {
         // Note: we could get rounding errors here
-        _time = (time * segment.timescale) / timescale;
-        _duration = (duration * segment.timescale) / timescale;
+        _time = (segmentInfos.time * segment.timescale) / segmentInfos.timescale;
+        _duration = (segmentInfos.duration * segment.timescale) / segmentInfos.timescale;
       }
 
       if (segment.time === _time && segment.duration === _duration) {

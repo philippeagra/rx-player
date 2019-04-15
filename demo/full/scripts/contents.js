@@ -1,5 +1,11 @@
 export default [
   {
+    "name": "Metaplaylist example",
+    "url": "http://127.0.0.1:8080/metaplaylist.json",
+    "transport": "metaplaylist",
+    "live": true,
+  },
+  {
     "name": "DASH-IF - SegmentTimeline live stream",
     "url": "https://vm2.dashif.org/livesim-dev/segtimeline_1/testpic_6s/Manifest.mpd",
     "transport": "dash",
